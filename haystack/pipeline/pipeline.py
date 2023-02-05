@@ -65,6 +65,24 @@ class Pipeline:
         self._search_actions_in = search_modules if search_modules is not None else ["haystack.actions", "__main__"]
         self.available_actions = find_actions(search_modules)
 
+    def validate(self):
+        """
+        Shorthand to call validate() on this pipeline.
+        """
+        validate(self.graph, self.available_actions)
+
+    def warm_up(self):
+        """
+        Shorthand to call warm_up() on this pipeline.
+        """
+        warm_up(self.graph, self.available_actions)
+
+    def cool_down(self):
+        """
+        Shorthand to call cool_down() on this pipeline.
+        """
+        cool_down(self.graph)
+
     def save(self, path: Path) -> None:
         """
         Saves a pipeline to YAML.
@@ -116,10 +134,6 @@ class Pipeline:
         in case of conflicts by assigning a weight to each edge. Note that iterators (lists, dictionaries, etc...)
         are merged instead of replaced, but in case of internal conflicts the same priority order applies.
         """
-        # All nodes names must be in the pipeline already
-        if any(node not in self.graph.nodes for node in nodes):
-            raise ValueError(f"All node must be present in the pipeline before connecting them.")
-
         # Check weights
         if not weights:
             weights = [1] * len(nodes)
@@ -134,9 +148,18 @@ class Pipeline:
 
             # Find out if the edge is named
             if "." in input_node:
-                input_node, edge_name = input_node.split(".", maxsplit=2)
+                input_node, edge_name = input_node.split(".", maxsplit=1)
             else:
                 edge_name = DEFAULT_EDGE_NAME
+
+            # Remove edge name from output_node
+            output_node = output_node.split(".", maxsplit=2)[0]
+
+            # All nodes names must be in the pipeline already
+            if input_node not in self.graph.nodes:
+                raise ValueError(f"{input_node} is not present in the pipeline.")
+            if output_node not in self.graph.nodes:
+                raise ValueError(f"{output_node} is not present in the pipeline.")
 
             # Create the edge
             logger.debug(
@@ -257,7 +280,8 @@ class Pipeline:
                     )
                 except Exception as e:
                     raise PipelineError(
-                        f"{node_name} failed:\n\ndata={input_data}\n\nparameters={input_params}\n\outgoing_edges={outgoing_edges}"
+                        f"{node_name} failed:\n\ndata={input_data}\n\nparameters={input_params}\n\noutgoing_edges={outgoing_edges}\n\n"
+                        "See the stacktrace above for more information."
                     ) from e
 
                 # Store the output

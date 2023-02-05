@@ -107,20 +107,18 @@ def validate(graph: nx.DiGraph, available_actions: Dict[str, Callable[..., Any]]
             raise PipelineValidationError("No action named %s found.", action)
 
         # Class Actions might implement a cls.validate() method to customize validation
-        if isclass(action):
-            if hasattr(action, "validate") and "init" in graph.nodes[node].keys():
-                action.validate(graph.nodes[node]["init"])
-
-        elif isinstance(action, str) and isclass(available_actions[action]):
+        if isinstance(action, str) and isclass(available_actions[action]):
+            # Cold node
+            # remember that validation does not occurr on warm nodes because they're already instantiated
             if hasattr(available_actions[action], "validate") and "init" in graph.nodes[node].keys():
                 if isinstance(graph.nodes[node]["init"], str):
                     try:
                         parameters = json.loads(graph.nodes[node]["init"])
                     except Exception as e:
-                        raise ActionValidationError(f"Can't decode the init parameters for action {node}")
+                        raise ActionValidationError(f"Can't deserialize the init parameters for action {node}")
                 else:
                     parameters = graph.nodes[node]["init"]
-                available_actions[action].validate(parameters)
+                available_actions[action].validate(available_actions[action], parameters)
 
     logger.debug("Pipeline is valid")
 
@@ -187,7 +185,10 @@ def cool_down(graph: nx.DiGraph()) -> None:
                 graph.nodes[name]["init"] = graph.nodes[name]["action"].init_parameters
             except Exception as e:
                 raise PipelineSerializationError(
-                    f"A class Action failed to provide its init parameters: {name}"
+                    f"A class Action failed to provide its init parameters: {name}\n"
+                    "If this is an action you wrote, you should save your init parameters into an instance "
+                    "attribute called 'self.init_parameters' for this check to pass. Consider adding this "
+                    "step into your class' '__init__' method."
                 ) from e
 
             # This is a new action instance, so let's store it

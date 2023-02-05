@@ -53,7 +53,7 @@ class Count_1:
         self.counter = 0
         self.message = message
 
-    def __call__(self, name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
+    def run(self, name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
         self.counter += 1
         print(f"{self.message} / I'm {name}, instance {self}, and I was called {self.counter} times. Value is now {data['value']}")
         return {outgoing_edges[0]: (data, parameters)}
@@ -72,7 +72,7 @@ class Count_1:
 
 
 ######################################################################################
-# "Bare" Action API
+# "Simplified" Action API
 #
 #  Take
 #       name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]
@@ -101,11 +101,11 @@ def multiply_2(value, by=4):
 @haystack_simple_action
 class Count_2:
 
-    def __init__(self, message="hello"):
+    def __init__(self, message):
         self.message = message
         self.counter = 0
 
-    def __call__(self, value):
+    def run(self, value):
         self.counter += 1
         print(f"{self.message} / I was called {self.counter} times. Value is now {value}")
         return {}
@@ -116,6 +116,7 @@ class Count_2:
         print("~~ Count_2 is being validated! ~~")
         if "message" in init_parameters.keys() and init_parameters["message"].lower() not in ["hello", "bye"]:
             raise ActionValidationError("'message' must be either 'hello' or 'bye'!")
+
 
 
 ###########################################################################################################
@@ -167,8 +168,8 @@ pipe.add_node(name="rename1", action=rename, parameters={"old_name": "value", "n
 pipe.add_node(name="rename2", action=rename)
 pipe.add_node(name="sum", action=sum_a_b)
 pipe.add_node(name="counter2", action=counter)
-pipe.connect(["counter", "enumerate", "plus_one_1", "rename1", "sum", "counter2"])
-pipe.connect(["enumerate", "plus_one_2", "rename2", "sum"])
+pipe.connect(["counter", "enumerate.first", "plus_one_1", "rename1", "sum", "counter2"])
+pipe.connect(["enumerate.second", "plus_one_2", "rename2", "sum"])
 
 pipe.draw("pipeline2.png")
 
@@ -182,8 +183,8 @@ print("#################################################")
 
 pipe = Pipeline()
 
-counter2 = Count_2(message="Ciao!")
-counter3 = Count_1()
+counter2 = Count_2()
+counter3 = Count_1(message="Ciao!")
 pipe.add_node(name="counter1", action=counter2)
 pipe.add_node(name="multiplier", action=multiply_2, parameters={"by": 1})
 pipe.add_node(name="counter2", action=counter2)

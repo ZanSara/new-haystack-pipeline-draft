@@ -32,9 +32,14 @@ def relevant_arguments(
             "'haystack_simple_action' can only handle functions without **kwargs. Use a dictionary instead."
         )
 
+    # Check if there are unexpected parameters
+    unexpected_params = {key: value for key, value in parameters.get(name, {}).items() if key not in signature.parameters}
+    if unexpected_params:
+        logger.error("%s received one or more unexpected parameter(s): %s. They will be ignored.", name, unexpected_params)
+    
     # Filter out what the action expects
     filtered_data = {key: value for key, value in data.items() if key in signature.parameters}
-    filtered_params = {key: value for key, value in parameters.get(name, {}).items()}
+    filtered_params = {key: value for key, value in parameters.get(name, {}).items() if key in signature.parameters}
 
     action_kwargs = {**filtered_data, **filtered_params}
     logger.debug("%s is about to receive the following kwargs: %s", callable, action_kwargs)
