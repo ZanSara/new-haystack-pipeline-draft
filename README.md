@@ -1,1 +1,1 @@
-Haystack 2.0
+Haystack 2.0 - Pipeline refactoring draft

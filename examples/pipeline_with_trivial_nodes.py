@@ -59,9 +59,10 @@ class Count_1:
         return {outgoing_edges[0]: (data, parameters)}
 
     @classmethod
-    def validate(cls):
-        print("~~ Counter_1 is being validated! ~~")
-        return True
+    def validate(cls, init_parameters: Dict[str, Any]) -> None:
+        print("~~ Count_1 is being validated! ~~")
+        if "message" in init_parameters.keys() and init_parameters["message"].lower() not in ["hello", "bye"]:
+            raise ActionValidationError("'message' must be either 'hello' or 'bye'!")
 
     @property
     def init_parameters(self):
@@ -109,11 +110,12 @@ class Count_2:
         print(f"{self.message} / I was called {self.counter} times. Value is now {value}")
         return {}
 
-    # TODO implement default validation in haystack_simple_node
+    # TODO Can we implement default validation in haystack_simple_node?
     @classmethod
-    def validate(cls):
+    def validate(cls, init_parameters: Dict[str, Any]):
         print("~~ Count_2 is being validated! ~~")
-        return True
+        if "message" in init_parameters.keys() and init_parameters["message"].lower() not in ["hello", "bye"]:
+            raise ActionValidationError("'message' must be either 'hello' or 'bye'!")
 
 
 ###########################################################################################################
@@ -180,7 +182,7 @@ print("#################################################")
 
 pipe = Pipeline()
 
-counter2 = Count_2(message="Bye")
+counter2 = Count_2(message="Ciao!")
 counter3 = Count_1()
 pipe.add_node(name="counter1", action=counter2)
 pipe.add_node(name="multiplier", action=multiply_2, parameters={"by": 1})

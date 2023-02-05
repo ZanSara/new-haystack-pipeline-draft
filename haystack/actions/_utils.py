@@ -1,7 +1,4 @@
-from typing import Dict, Any, List, Callable
-from pathlib import Path
-from functools import wraps
-from itertools import zip_longest
+from typing import Dict, Any, Callable
 import inspect
 import logging
 
@@ -9,7 +6,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_EDGE_NAME = "all"
+
+
 class ActionError(Exception):
+    pass
+
+class ActionValidationError(ActionError):
     pass
 
 

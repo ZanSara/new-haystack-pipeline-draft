@@ -1,20 +1,18 @@
 from typing import *
 from pathlib import Path
 import logging
-import json
-from inspect import isclass
 from copy import deepcopy
 import yaml
 
 import networkx as nx
 from networkx.drawing.nx_agraph import to_agraph
 
+from haystack.actions._utils import DEFAULT_EDGE_NAME
 from haystack.pipeline._utils import (
-    DEFAULT_EDGE_NAME,
     PipelineError,
-    PipelineValidationError,
     merge,
     find_actions,
+    validate as validate,
     is_warm,
     is_cold,
     warm_up,
@@ -26,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 class Pipeline:
-    def __init__(self, path: Optional[Path] = None, search_actions_in: Optional[List[str]] = None, validate: bool = True):
+
+    def __init__(self, path: Optional[Path] = None, search_actions_in: Optional[List[str]] = None, validation: bool = True):
         """
         Loads the pipeline from `path`, or creates an empty pipeline if no path is given.
 
@@ -47,8 +46,8 @@ class Pipeline:
                 self.graph: nx.DiGraph = nx.node_link_graph(yaml.safe_load(f))
             logger.debug("Pipeline edge list:\n - %s", "\n - ".join([str(edge) for edge in nx.to_edgelist(self.graph)]))
 
-            if validate:
-                self.validate()
+            if validation:
+                validate(self.graph, self.available_actions)
             else:
                 logger.info("Skipping pipeline validation.")
 
@@ -65,30 +64,6 @@ class Pipeline:
         """
         self._search_actions_in = search_modules if search_modules is not None else ["haystack.actions", "__main__"]
         self.available_actions = find_actions(search_modules)
-
-    def validate(self) -> bool:
-        """
-        Makes sure the pipeline can run. Useful especially for pipelines loaded from file.
-
-        NOTE: Does NOT warm up the pipeline, but must have run the actions discovery
-        (`self.available_actions` must be properly populated).
-        """
-        for node in self.graph.nodes:
-            action = self.graph.nodes[node]["action"]
-
-            # Check all string actions can be loaded
-            if isinstance(action, str) and action not in self.available_actions.keys():
-                raise PipelineValidationError("No action named %s found.", action)
-
-            # Class Actions might implement a cls.validate() method to customize validation
-            if isclass(action):
-                if hasattr(action, "validate"):
-                    action.validate()
-            elif isinstance(action, str) and isclass(self.available_actions[action]):
-                if hasattr(self.available_actions[action], "validate"):
-                    self.available_actions[action].validate()
-
-        logger.debug("Pipeline is valid")
 
     def save(self, path: Path) -> None:
         """
@@ -178,6 +153,7 @@ class Pipeline:
             raise ValueError(f"Node named {name} not found.")
         return self.graph.nodes[candidates[0]]
 
+    # TODO later
     def concatenate(self, pipeline, input_edge, output_edge):
         # Watch out, Pipelines might have N input actions and M output actions!
         # One might need to specify to-from which edge to concatenate!

@@ -3,8 +3,7 @@ from functools import wraps
 import logging
 import inspect
 
-from haystack.pipeline.pipeline import DEFAULT_EDGE_NAME
-from haystack.actions._utils import ActionError, relevant_arguments
+from haystack.actions._utils import DEFAULT_EDGE_NAME, ActionError, relevant_arguments
 
 
 logger = logging.getLogger(__name__)
@@ -16,6 +15,9 @@ def haystack_action(callable):
     return callable
 
 
+
+# TODO Implement default validation for the input parameters (check that all mandatory keys exist)
+# Remember that validate() it's a CLASS METHOD
 def haystack_simple_action(callable):
     logger.debug("Registering %s as a Haystack simple action", callable)
 
@@ -26,7 +28,7 @@ def haystack_simple_action(callable):
         @wraps(call_method)
         def call_wrapper(self, name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
             if outgoing_edges and outgoing_edges != [DEFAULT_EDGE_NAME]:
-                raise ActionError("haystack_simple_action can only output to one edge")
+                raise ActionError("'haystack_simple_action' can only output to one edge")
             output = call_method(self, **relevant_arguments(call_method, name, data, parameters)) or {}
             return {DEFAULT_EDGE_NAME: ({**data, **output}, parameters)}
 
@@ -36,8 +38,8 @@ def haystack_simple_action(callable):
         def init_wrapper(self, *args, **kwargs):
             if args:
                 raise ActionError(
-                    "haystack_simple_action does not support unnamed init parameters. "
-                    "Pass all parameters as `MyAction(param_name=param_value)` instead of just `MyAction(param_value)`.")
+                    "'haystack_simple_action' does not support unnamed init parameters. "
+                    "Pass all parameters as `MyAction(param_name=param_value)` instead of just `MyAction(param_value)`. ")
             self.init_parameters = kwargs
             init_method(self, **kwargs)
             
@@ -50,7 +52,7 @@ def haystack_simple_action(callable):
     @wraps(callable)
     def wrapper(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
         if outgoing_edges and outgoing_edges != [DEFAULT_EDGE_NAME]:
-            raise ActionError("haystack_simple_action can only output to one edge")
+            raise ActionError("'haystack_simple_action' can only output to one edge")
         output = callable(**relevant_arguments(callable, name, data, parameters)) or {}
         return {DEFAULT_EDGE_NAME: ({**data, **output}, parameters)}
 

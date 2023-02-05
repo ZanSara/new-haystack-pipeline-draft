@@ -10,11 +10,10 @@ from importlib import import_module
 
 import networkx as nx
 
+from haystack.actions._utils import ActionValidationError
+
 
 logger = logging.getLogger(__name__)
-
-
-DEFAULT_EDGE_NAME = "all"
 
 
 class PipelineError(Exception):
@@ -92,6 +91,38 @@ def merge(first_dict: Dict[str, Any], second_dict: Dict[str, Any]) -> Dict[str, 
             )  # Cast it to the same type as the merging dicts's content
 
     return merge_dictionary
+
+
+def validate(graph: nx.DiGraph, available_actions: Dict[str, Callable[..., Any]]) -> None:
+    """
+    Makes sure the pipeline can run. Useful especially for pipelines loaded from file.
+
+    NOTE: Does NOT warm up the pipeline if it's cold.
+    """
+    for node in graph.nodes:
+        action = graph.nodes[node]["action"]
+
+        # Check that all string actions could be loaded
+        if isinstance(action, str) and action not in available_actions.keys():
+            raise PipelineValidationError("No action named %s found.", action)
+
+        # Class Actions might implement a cls.validate() method to customize validation
+        if isclass(action):
+            if hasattr(action, "validate") and "init" in graph.nodes[node].keys():
+                action.validate(graph.nodes[node]["init"])
+
+        elif isinstance(action, str) and isclass(available_actions[action]):
+            if hasattr(available_actions[action], "validate") and "init" in graph.nodes[node].keys():
+                if isinstance(graph.nodes[node]["init"], str):
+                    try:
+                        parameters = json.loads(graph.nodes[node]["init"])
+                    except Exception as e:
+                        raise ActionValidationError(f"Can't decode the init parameters for action {node}")
+                else:
+                    parameters = graph.nodes[node]["init"]
+                available_actions[action].validate(parameters)
+
+    logger.debug("Pipeline is valid")
 
 
 def is_cold(graph: nx.DiGraph) -> bool:
