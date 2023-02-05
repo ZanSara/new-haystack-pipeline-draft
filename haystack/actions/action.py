@@ -86,7 +86,7 @@ def haystack_simple_action(callable):
 
         @wraps(run_method)
         def run_wrapper(self, name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
-            if outgoing_edges and outgoing_edges != [DEFAULT_EDGE_NAME]:
+            if outgoing_edges and any(edge != DEFAULT_EDGE_NAME for edge in outgoing_edges):
                 raise ActionError("'haystack_simple_action' can only output to one edge")
             output = run_method(self, **relevant_arguments(run_method, name, data, parameters)) or {}
             return {DEFAULT_EDGE_NAME: ({**data, **output}, parameters)}
@@ -130,7 +130,7 @@ def haystack_simple_action(callable):
     # function: regular decorator pattern
     @wraps(callable)
     def wrapper(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
-        if outgoing_edges and outgoing_edges != [DEFAULT_EDGE_NAME]:
+        if outgoing_edges and any(edge != DEFAULT_EDGE_NAME for edge in outgoing_edges):
             raise ActionError("'haystack_simple_action' can only output to one edge")
         output = callable(**relevant_arguments(callable, name, data, parameters)) or {}
         return {DEFAULT_EDGE_NAME: ({**data, **output}, parameters)}

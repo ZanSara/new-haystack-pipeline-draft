@@ -161,11 +161,16 @@ class Pipeline:
             if output_node not in self.graph.nodes:
                 raise ValueError(f"{output_node} is not present in the pipeline.")
 
-            # Create the edge
-            logger.debug(
-                "Connecting node %s to node %s along edge %s (weight: %s)", input_node, output_node, edge_name, weight
-            )
-            self.graph.add_edge(input_node, output_node, label=edge_name, weight=weight)
+            # Check if the edge already exists
+            if any(edge[1] == output_node for edge in self.graph.edges.data(nbunch=input_node)):
+                logger.debug("An edge connecting node %s and node %s already exists: skipping.", input_node, output_node)
+
+            else:
+                # Create the edge
+                logger.debug(
+                    "Connecting node %s to node %s along edge %s (weight: %s)", input_node, output_node, edge_name, weight
+                )
+                self.graph.add_edge(input_node, output_node, label=edge_name, weight=weight)
 
     def get_node(self, name: str) -> Dict[str, Any]:
         """
@@ -274,6 +279,7 @@ class Pipeline:
 
                 # Call the node
                 try:
+                    logger.debug("Calling %s (%s)", node_name, node_action)
                     out_dict: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]]
                     out_dict = node_action(
                         name=node_name, data=input_data, parameters=input_params, outgoing_edges=outgoing_edges_names
@@ -303,6 +309,10 @@ class Pipeline:
 
             # Fill up the list with the new nodes to process
             node_names = next_node_names
+
+        from pprint import pprint
+        pprint(inputs_buffer)
+        pprint(output_data)
 
         # Simplify output for single output pipelines
         if len(output_data.keys()) == 1:

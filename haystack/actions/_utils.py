@@ -42,5 +42,5 @@ def relevant_arguments(
     filtered_params = {key: value for key, value in parameters.get(name, {}).items() if key in signature.parameters}
 
     action_kwargs = {**filtered_data, **filtered_params}
-    logger.debug("%s is about to receive the following kwargs: %s", callable, action_kwargs)
+    logger.debug("%s kwargs: %s", name, action_kwargs)
     return action_kwargs

@@ -81,6 +81,7 @@ def merge(first_dict: Dict[str, Any], second_dict: Dict[str, Any]) -> Dict[str, 
         # if both have this key and it contains the same type of iterable, merge them
         elif (
             isinstance(first_dict.get(key, None), Iterable)
+            and not isinstance(first_dict.get(key, None), str)
             and isinstance(second_dict.get(key, None), Iterable)
             and type(first_dict[key]) == type(second_dict[key])
         ):
