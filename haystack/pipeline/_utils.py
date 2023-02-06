@@ -120,13 +120,9 @@ def validate(graph: nx.DiGraph, available_actions: Dict[str, Callable[..., Any]]
         registered_function = isfunction(action) and action in available_actions.values()
         registered_class = type(action) in available_actions.values()
         name_of_registered_action = isinstance(action, str) and action in available_actions.keys()
-        if not (
-            registered_function or 
-            registered_class or 
-            name_of_registered_action
-        ):
+        if not (registered_function or registered_class or name_of_registered_action):
             raise PipelineValidationError(f"Action {action} not found. Are you sure it is a Haystack action?")
-        
+
         # Class Actions might implement a cls.validate() method to customize validation
         if isinstance(action, str) and isclass(available_actions[action]):
             # Cold node

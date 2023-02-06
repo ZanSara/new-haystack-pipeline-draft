@@ -50,9 +50,10 @@ def test_simple_pipeline(tmp_path):
     )
 
     from pprint import pprint
+
     pprint(results)
 
-    assert results == {'first': 3, 'second': 2, 'sum': 5}
+    assert results == {"first": 3, "second": 2, "sum": 5}
 
 
 if __name__ == "__main__":

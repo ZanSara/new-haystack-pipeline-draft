@@ -38,9 +38,7 @@ class Pipeline:
         set `search_actions_in=[]`, but remember to set it later or the pipeline will be unable to load any action.
         """
         self.available_actions = {}
-        self.search_actions_in = (
-            search_actions_in if search_actions_in is not None else DEFAULT_SEARCH_MODULES
-        )
+        self.search_actions_in = search_actions_in if search_actions_in is not None else DEFAULT_SEARCH_MODULES
 
         if not path:
             logger.debug("Loading an empty pipeline")

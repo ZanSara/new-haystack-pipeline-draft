@@ -81,7 +81,9 @@ def test_many2many_pipeline(tmp_path):
         ]
     )
     pipeline.connect(["fork.second", "rename_b", "collapse"])
-    pipeline.connect(["input_count_2", "add_one_2", "rename_2", "sum", "edge_number.second", "rename_4", "output_count"])
+    pipeline.connect(
+        ["input_count_2", "add_one_2", "rename_2", "sum", "edge_number.second", "rename_4", "output_count"]
+    )
 
     pipeline.draw(tmp_path / "many2many_pipeline.png")
 
@@ -95,9 +97,13 @@ def test_many2many_pipeline(tmp_path):
     )
 
     from pprint import pprint
+
     pprint(results)
 
-    assert results == {'add_one_3': {'first': 1, 'second': 2, 'sum': 5, 'value': 2}, 'output_count': {'first': 2, 'second': 2, 'sum': 5, 'value': 1}}
+    assert results == {
+        "add_one_3": {"first": 1, "second": 2, "sum": 5, "value": 2},
+        "output_count": {"first": 2, "second": 2, "sum": 5, "value": 1},
+    }
     assert counter.counter == 14
 
 
