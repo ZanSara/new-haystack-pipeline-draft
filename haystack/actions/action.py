@@ -18,7 +18,7 @@ def haystack_action(callable):
 
         `def my_action(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str])`
 
-    If the callable is a clas, the method used is `run`, which is expected to have the same signature 
+    If the callable is a clas, the method used is `run`, which is expected to have the same signature
     plus a `self` argument at the start.
 
     Expects the following output:
@@ -26,17 +26,17 @@ def haystack_action(callable):
         `{output_edge: (relevant_data, relevant_parameters) for output_edge in output_edges}`
 
     Actions can therefore remove data from the pipeline and add/remove/alter parameter for EVERY following
-    node by properly tweaking this output. Failing to produce output on one edge means that whatever node 
+    node by properly tweaking this output. Failing to produce output on one edge means that whatever node
     connects to it will receive no data and no parameters (and likely crash).
 
-    Note that classes should also provide a `validate()` method if they want the class to be validated 
+    Note that classes should also provide a `validate()` method if they want the class to be validated
     when warmed up.
     """
     logger.debug("Registering %s as a Haystack action", callable)
 
     # __haystack_action__ is used to tell Haystack Actions from regular functions.
     # Used by `find_actions`.
-    # Set to the desired action name: normally the function/class name, 
+    # Set to the desired action name: normally the function/class name,
     # but could be customized.
     callable.__haystack_action__ = callable.__name__
 
@@ -50,7 +50,9 @@ def haystack_action(callable):
 
         # Check for validate()
         if not hasattr(callable, "validate"):
-            raise ActionError("Haystack class actions must have a validate() method. See the docs for more information.")
+            raise ActionError(
+                "Haystack class actions must have a validate() method. See the docs for more information."
+            )
 
     return callable
 
@@ -66,7 +68,7 @@ def haystack_simple_action(callable):
 
     if the callable is a class, the `run()` method is the one that the pipeline will invoke. It can have
     any signature just as in the case of the function. Note that classes should also provide a `validate()`
-    method if they want the class to be validated when warmed up. However @haystack_simple_action already 
+    method if they want the class to be validated when warmed up. However @haystack_simple_action already
     provides a basic validation method that checks for the presence of all and only the required init
     parameters in the `init_parameters` dictionary.
 
@@ -93,34 +95,45 @@ def haystack_simple_action(callable):
 
         # Default 'validate()' that just checks that all mandatory args are there and no unknown args are given
         validate_method = callable.validate if hasattr(callable, "validate") else lambda cls, init_parameters: None
+
         @wraps(validate_method)
         def validate_wrapper(cls, init_parameters: Dict[str, Any]):
             signature = inspect.signature(callable.__init__)
-            
-            # Check that all parameters given are in the signature 
+
+            # Check that all parameters given are in the signature
             # TODO check types too!
             for param_name in init_parameters.keys():
                 if param_name not in signature.parameters.keys():
-                    raise ActionValidationError(f"{callable.__name__} does not expect a parameter called {param_name} in its init method.")
+                    raise ActionValidationError(
+                        f"{callable.__name__} does not expect a parameter called {param_name} in its init method."
+                    )
 
             # Make sure all mandatory arguments are present
             for name in signature.parameters:
-                if name != "self" and signature.parameters[name].default == inspect.Parameter.empty and name not in init_parameters:
-                    raise ActionValidationError(f"{callable.__name__} requires a parameter called {param_name} in its init method.")
+                if (
+                    name != "self"
+                    and signature.parameters[name].default == inspect.Parameter.empty
+                    and name not in init_parameters
+                ):
+                    raise ActionValidationError(
+                        f"{callable.__name__} requires a parameter called {param_name} in its init method."
+                    )
 
             validate_method(init_parameters=init_parameters)
 
         # We need to also wrap __init__ to collect the init parameters by default
         init_method = callable.__init__
+
         @wraps(init_method)
         def init_wrapper(self, *args, **kwargs):
             if args:
                 raise ActionError(
                     "'haystack_simple_action' does not support unnamed init parameters. "
-                    "Pass all parameters as `MyAction(param_name=param_value)` instead of just `MyAction(param_value)`. ")
+                    "Pass all parameters as `MyAction(param_name=param_value)` instead of just `MyAction(param_value)`. "
+                )
             self.init_parameters = kwargs
             init_method(self, **kwargs)
-            
+
         callable.__call__ = run_wrapper
         callable.__init__ = init_wrapper
         callable.validate = validate_wrapper

@@ -20,6 +20,10 @@ class PipelineError(Exception):
     pass
 
 
+class PipelineRuntimeError(Exception):
+    pass
+
+
 class PipelineValidationError(PipelineError):
     pass
 
@@ -174,10 +178,11 @@ def cool_down(graph: nx.DiGraph()) -> None:
     """
     reused_instances = {}
     for name in graph.nodes:
-
         # If the action is a reused instance, let's add the instance ID to the meta
         if graph.nodes[name]["action"] in reused_instances.values():
-            graph.nodes[name]["instance_id"] = [key for key, value in reused_instances.items() if value == graph.nodes[name]["action"]][0]
+            graph.nodes[name]["instance_id"] = [
+                key for key, value in reused_instances.items() if value == graph.nodes[name]["action"]
+            ][0]
 
         elif hasattr(graph.nodes[name]["action"], "init_parameters"):
             # Class nodes need to have a self.init_parameters attribute (or property)
@@ -194,7 +199,7 @@ def cool_down(graph: nx.DiGraph()) -> None:
 
             # This is a new action instance, so let's store it
             reused_instances[name] = graph.nodes[name]["action"]
-        
+
         # Serialize the callable by name
         try:
             graph.nodes[name]["action"] = graph.nodes[name]["action"].__haystack_action__

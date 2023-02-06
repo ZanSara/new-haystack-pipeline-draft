@@ -3,20 +3,21 @@ from pathlib import Path
 import logging
 from copy import deepcopy
 import yaml
+import json
 
 import networkx as nx
 from networkx.drawing.nx_agraph import to_agraph
 
 from haystack.actions._utils import DEFAULT_EDGE_NAME
 from haystack.pipeline._utils import (
-    PipelineError,
+    PipelineRuntimeError,
     merge,
     find_actions,
     validate as validate,
     is_warm,
     is_cold,
     warm_up,
-    cool_down
+    cool_down,
 )
 
 
@@ -24,8 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 class Pipeline:
-
-    def __init__(self, path: Optional[Path] = None, search_actions_in: Optional[List[str]] = None, validation: bool = True):
+    def __init__(
+        self, path: Optional[Path] = None, search_actions_in: Optional[List[str]] = None, validation: bool = True
+    ):
         """
         Loads the pipeline from `path`, or creates an empty pipeline if no path is given.
 
@@ -97,12 +99,7 @@ class Pipeline:
             yaml.dump(nx.node_link_data(_graph), f)
         logger.debug("Pipeline saved to %s.", path)
 
-    def add_node(
-        self,
-        name: str,
-        action: Callable[..., Any],
-        parameters: Optional[Dict[str, Any]] = None
-    ) -> None:
+    def add_node(self, name: str, action: Callable[..., Any], parameters: Optional[Dict[str, Any]] = None) -> None:
         """
         Create a node for the given action. Nodes are not connected to anything by default:
         use `Pipeline.connect()` to connect nodes together.
@@ -163,12 +160,18 @@ class Pipeline:
 
             # Check if the edge already exists
             if any(edge[1] == output_node for edge in self.graph.edges.data(nbunch=input_node)):
-                logger.debug("An edge connecting node %s and node %s already exists: skipping.", input_node, output_node)
+                logger.debug(
+                    "An edge connecting node %s and node %s already exists: skipping.", input_node, output_node
+                )
 
             else:
                 # Create the edge
                 logger.debug(
-                    "Connecting node %s to node %s along edge %s (weight: %s)", input_node, output_node, edge_name, weight
+                    "Connecting node %s to node %s along edge %s (weight: %s)",
+                    input_node,
+                    output_node,
+                    edge_name,
+                    weight,
                 )
                 self.graph.add_edge(input_node, output_node, label=edge_name, weight=weight)
 
@@ -201,7 +204,12 @@ class Pipeline:
         graphviz.draw(path)
         logger.debug(f"Pipeline diagram saved at {path}")
 
-    def run(self, data: Dict[str, Any], parameters: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def run(
+        self,
+        data: Dict[str, Any],
+        parameters: Optional[Dict[str, Dict[str, Any]]] = None,
+        with_debug_info: bool = False,
+    ) -> Dict[str, Any]:
         """
 
         data = {
@@ -231,14 +239,23 @@ class Pipeline:
                 "You passed parameters for one or more node(s) that do not exist in the pipeline: %s",
                 [node for node in parameters.keys() if node not in self.graph.nodes],
             )
-        
+
         # Warm up the pipeline if necessary
         if not is_warm(self.graph):
-            logger.info("Pipeline hasn't been warmed up before calling run(): warming it up now. This operation can take some time.")
+            logger.info(
+                "Pipeline hasn't been warmed up before calling run(): warming it up now. This operation can take some time."
+            )
             warm_up(graph=self.graph, available_actions=self.available_actions)
 
         # Prepare the actions input buffers
         inputs_buffer = {node_name: [] for node_name in self.graph.nodes}
+
+        # Locate merge nodes (nodes with more than one input edge) and store their input edges info
+        # Merge nodes must wait for all its inputs to be ready before running.
+        merge_nodes = {node: self.graph.in_edges(node, data=True) for node in self.graph.nodes}
+        merge_nodes = {
+            node: {in_edge[0] for in_edge in inputs} for node, inputs in merge_nodes.items() if len(inputs) > 1
+        }
 
         # Collect the nodes taking no input edges and pass them the pipeline input data
         node_names = [node for node in self.graph.nodes if not any(edge[1] == node for edge in self.graph.edges.data())]
@@ -248,73 +265,96 @@ class Pipeline:
         # Execution loop
         output_data = {}
         while node_names:
-            next_node_names = []
-            for node_name in node_names:
-                # Read the inputs in the buffer and merge them into a single dict if necessary
-                # ASSUMPTION: input values are already sorted by weight!
-                input_data = {}
-                input_params = {}
-                for node_input_values in inputs_buffer[node_name]:
-                    input_data = merge(input_data, node_input_values["data"])
-                    input_params = merge(input_params, node_input_values["parameters"])
+            node_name, node_names = node_names[0], node_names[1:]
 
-                # Find out where the output will go
-                outgoing_data = self.graph.edges.data(nbunch=[node_name])
-                if outgoing_data:
-                    # Regular node with output edges
-                    outgoing_nodes, outgoing_edges = zip(*[(data[1], data[2]) for data in outgoing_data])
-                    outgoing_edges_names = [data["label"] for data in outgoing_edges]
+            # Make sure all expected input nodes have run. Sometimes with branched pipelines where a
+            # branch is longet than the other, the merging node might be called before the long
+            # branch had time to run. In this case we skip the merge node.
+            # NOTE: the merge node can be removed from node_names, because it will be added again
+            # then the longer branch's last node is called.
+            if node_name in merge_nodes.keys() and merge_nodes[node_name] != {
+                buffer["from"] for buffer in inputs_buffer[node_name]
+            }:
+                logging.debug("Skipping %s, not all input nodes have run yet.", node_name)
+                continue
 
-                else:
-                    # Terminal node
-                    outgoing_nodes, outgoing_edges, outgoing_edges_names = [], [], [DEFAULT_EDGE_NAME]
+            # Read the inputs in the buffer and merge them into a single dict if necessary
+            # ASSUMPTION: input values are already sorted by weight!
+            input_data = {}
+            input_params = {}
+            for node_input_values in inputs_buffer[node_name]:
+                input_data = merge(input_data, node_input_values["data"])
+                input_params = merge(input_params, node_input_values["parameters"])
 
-                # Get the node's callable
-                node_action = self.graph.nodes[node_name]["action"]
+            # Find out where the output will go
+            outgoing_data = self.graph.edges.data(nbunch=[node_name])
+            if outgoing_data:
+                # Regular node with output edges
+                outgoing_nodes, outgoing_edges = zip(*[(data[1], data[2]) for data in outgoing_data])
+                outgoing_edges_names = [data["label"] for data in outgoing_edges]
+            else:
+                # Terminal node - add a default edge, so the node itself doesn't need to know it's terminal
+                outgoing_nodes, outgoing_edges, outgoing_edges_names = [], [], [DEFAULT_EDGE_NAME]
 
-                # Check for default parameters and add them (lowest priority)
-                default_params = self.graph.nodes[node_name]["parameters"]
-                if default_params:
-                    input_params[node_name] = {**default_params, **input_params.get(node_name, {})}
+            # Get the node's callable
+            node_action = self.graph.nodes[node_name]["action"]
 
-                # Call the node
-                try:
-                    logger.debug("Calling %s (%s)", node_name, node_action)
-                    out_dict: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]]
-                    out_dict = node_action(
-                        name=node_name, data=input_data, parameters=input_params, outgoing_edges=outgoing_edges_names
+            # Check for default parameters and add them (lowest priority)
+            default_params = self.graph.nodes[node_name]["parameters"]
+            if default_params:
+                input_params[node_name] = {**default_params, **input_params.get(node_name, {})}
+
+            # Call the node
+            try:
+                print("Calling", node_name)
+                logger.debug("Calling %s (%s)", node_name, node_action)
+                out_dict: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]]
+                out_dict = node_action(
+                    name=node_name, data=input_data, parameters=input_params, outgoing_edges=outgoing_edges_names
+                )
+            except Exception as e:
+                logger.debug(
+                    "%s failed! See the error below. Here is the current input buffer:\n%s",
+                    node_name,
+                    json.dumps(inputs_buffer, indent=4, default=str),
+                )
+                raise PipelineRuntimeError(
+                    f"{node_name} failed:\n\ndata={input_data}\n\nparameters={input_params}\n\noutgoing_edges={outgoing_edges}\n\n"
+                    "See the stacktrace above for more information."
+                ) from e
+
+            # Store the output
+            if outgoing_nodes:
+
+                # Store in the buffer to be used by following nodes
+                for outgoing_node, outgoing_edge in zip(outgoing_nodes, outgoing_edges):
+                    node_data, node_params = out_dict.get(outgoing_edge["label"], ({}, {}))
+                    inputs_buffer[outgoing_node].append(
+                        {
+                            "data": node_data,
+                            "parameters": node_params,
+                            "weight": outgoing_edge["weight"],
+                            "from": node_name,
+                        }
                     )
-                except Exception as e:
-                    raise PipelineError(
-                        f"{node_name} failed:\n\ndata={input_data}\n\nparameters={input_params}\n\noutgoing_edges={outgoing_edges}\n\n"
-                        "See the stacktrace above for more information."
-                    ) from e
+                    inputs_buffer[outgoing_node].sort(key=lambda x: x["weight"])  # Sort the outputs by weight
 
-                # Store the output
-                if outgoing_nodes:
-                    # Store in the buffer to be used by following nodes
-                    for outgoing_node, outgoing_edge in zip(outgoing_nodes, outgoing_edges):
-                        node_data, node_params = out_dict.get(outgoing_edge["label"], ({}, {}))
-                        inputs_buffer[outgoing_node].append(
-                            {"data": node_data, "parameters": node_params, "weight": outgoing_edge["weight"]}
-                        )
-                        inputs_buffer[outgoing_node].sort(key=lambda x: x["weight"])  # Sort the outputs by weight
-                else:
-                    # Store in the output dict to be returned by the pipeline
-                    node_data, node_params = out_dict.get(DEFAULT_EDGE_NAME, ({}, {}))
-                    output_data[node_name] = node_data
+                # Add the outgoing nodes into the list of nodes to run.
+                # Take care of avoiding duplicates (happens with nodes with multiple inputs)
+                for outgoing_node in outgoing_nodes:
+                    if not outgoing_node in node_names:
+                        node_names.append(outgoing_node)
 
-                # Add the outgoing nodes into the list of next nodes to run
-                next_node_names.extend(outgoing_nodes)
-
-            # Fill up the list with the new nodes to process
-            node_names = next_node_names
-
-        from pprint import pprint
-        pprint(inputs_buffer)
-        pprint(output_data)
+            else:
+                # Store in the output dict to be returned by the pipeline
+                node_data, node_params = out_dict.get(DEFAULT_EDGE_NAME, ({}, {}))
+                output_data[node_name] = node_data
 
         # Simplify output for single output pipelines
         if len(output_data.keys()) == 1:
-            return output_data[list(output_data.keys())[0]]
+            output_data = output_data[list(output_data.keys())[0]]
+
+        if with_debug_info:
+            return {"output": output_data, "_debug": inputs_buffer}
+
         return output_data
