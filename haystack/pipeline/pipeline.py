@@ -24,6 +24,9 @@ from haystack.pipeline._utils import (
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_SEARCH_MODULES = ["haystack.actions", "__main__"]
+
+
 class Pipeline:
     def __init__(
         self, path: Optional[Path] = None, search_actions_in: Optional[List[str]] = None, validation: bool = True
@@ -36,7 +39,7 @@ class Pipeline:
         """
         self.available_actions = {}
         self.search_actions_in = (
-            search_actions_in if search_actions_in is not None else ["haystack.actions", "__main__"]
+            search_actions_in if search_actions_in is not None else DEFAULT_SEARCH_MODULES
         )
 
         if not path:
@@ -233,7 +236,10 @@ class Pipeline:
         if not parameters:
             parameters = {}
 
-        # Quick parameters validation
+        # Make sure the pipeline is valid
+        self.validate()
+
+        # Validate the parameters
         if any(node not in self.graph.nodes for node in parameters.keys()):
             logging.warning(
                 "You passed parameters for one or more node(s) that do not exist in the pipeline: %s",
@@ -264,6 +270,7 @@ class Pipeline:
 
         # Execution loop
         output_data = {}
+        logger.info("Pipeline execution started.")
         while node_names:
             node_name, node_names = node_names[0], node_names[1:]
 
@@ -306,8 +313,7 @@ class Pipeline:
 
             # Call the node
             try:
-                print("Calling", node_name)
-                logger.debug("Calling %s (%s)", node_name, node_action)
+                logger.info("* Running %s", node_name)
                 out_dict: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]]
                 out_dict = node_action(
                     name=node_name, data=input_data, parameters=input_params, outgoing_edges=outgoing_edges_names
@@ -349,6 +355,8 @@ class Pipeline:
                 # Store in the output dict to be returned by the pipeline
                 node_data, node_params = out_dict.get(DEFAULT_EDGE_NAME, ({}, {}))
                 output_data[node_name] = node_data
+
+        logger.info("Pipeline executed successfully.")
 
         # Simplify output for single output pipelines
         if len(output_data.keys()) == 1:

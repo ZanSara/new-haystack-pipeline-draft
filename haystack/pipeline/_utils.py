@@ -104,13 +104,29 @@ def validate(graph: nx.DiGraph, available_actions: Dict[str, Callable[..., Any]]
 
     NOTE: Does NOT warm up the pipeline if it's cold.
     """
+    print(available_actions)
+
+    # Check that there are no isolated nodes or groups of nodes
+    if not nx.is_weakly_connected(graph):
+        raise PipelineValidationError(
+            "The graph is not fully connected. Make sure all the nodes are connected to the same graph. "
+            "You can use Pipeline.draw() to visualize the graph, or inspect the Pipeline.graph object."
+        )
+
     for node in graph.nodes:
         action = graph.nodes[node]["action"]
 
-        # Check that all string actions could be loaded
-        if isinstance(action, str) and action not in available_actions.keys():
-            raise PipelineValidationError("No action named %s found.", action)
-
+        # Check that all actions in the graph are actually registered actions
+        registered_function = isfunction(action) and action in available_actions.values()
+        registered_class = type(action) in available_actions.values()
+        name_of_registered_action = isinstance(action, str) and action in available_actions.keys()
+        if not (
+            registered_function or 
+            registered_class or 
+            name_of_registered_action
+        ):
+            raise PipelineValidationError(f"Action {action} not found. Are you sure it is a Haystack action?")
+        
         # Class Actions might implement a cls.validate() method to customize validation
         if isinstance(action, str) and isclass(available_actions[action]):
             # Cold node
@@ -123,7 +139,7 @@ def validate(graph: nx.DiGraph, available_actions: Dict[str, Callable[..., Any]]
                         raise ActionValidationError(f"Can't deserialize the init parameters for action {node}")
                 else:
                     parameters = graph.nodes[node]["init"]
-                available_actions[action].validate(available_actions[action], parameters)
+                available_actions[action].validate(init_parameters=parameters)
 
     logger.debug("Pipeline is valid")
 

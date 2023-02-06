@@ -97,7 +97,7 @@ def haystack_simple_action(callable):
         validate_method = callable.validate if hasattr(callable, "validate") else lambda cls, init_parameters: None
 
         @wraps(validate_method)
-        def validate_wrapper(cls, init_parameters: Dict[str, Any]):
+        def validate_wrapper(init_parameters: Dict[str, Any]):
             signature = inspect.signature(callable.__init__)
 
             # Check that all parameters given are in the signature
@@ -116,7 +116,7 @@ def haystack_simple_action(callable):
                     and name not in init_parameters
                 ):
                     raise ActionValidationError(
-                        f"{callable.__name__} requires a parameter called {param_name} in its init method."
+                        f"{callable.__name__} requires a parameter called {name} in its init method."
                     )
 
             validate_method(init_parameters=init_parameters)

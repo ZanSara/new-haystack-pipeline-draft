@@ -145,8 +145,8 @@ def test_bare_node_stateful_dont_need_init():
         def run(self, name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
             return {outgoing_edges[0]: (data, parameters)}
 
-        @classmethod
-        def validate(cls, init_parameters: Dict[str, Any]) -> None:
+        @staticmethod
+        def validate(init_parameters: Dict[str, Any]) -> None:
             pass
 
     action = Action()
@@ -168,8 +168,8 @@ def test_bare_node_stateful_no_init_no_input_no_output_no_validation():
             self.counter += 1
             return {outgoing_edges[0]: (data, parameters)}
 
-        @classmethod
-        def validate(cls, init_parameters: Dict[str, Any]) -> None:
+        @staticmethod
+        def validate(init_parameters: Dict[str, Any]) -> None:
             pass
 
     action = Action()
@@ -198,8 +198,8 @@ def test_bare_node_stateful_with_init_param_no_input_no_output_no_validation():
             self.counter += 1
             return {outgoing_edges[0]: (data, parameters)}
 
-        @classmethod
-        def validate(cls, init_parameters: Dict[str, Any]) -> None:
+        @staticmethod
+        def validate(init_parameters: Dict[str, Any]) -> None:
             return True
 
     action = Action(10)
@@ -228,8 +228,8 @@ def test_bare_node_stateful_one_input_one_output():
             self.counter += data["value"]
             return {outgoing_edges[0]: ({**data, "value": data["value"] + 3}, parameters)}
 
-        @classmethod
-        def validate(cls, init_parameters: Dict[str, Any]) -> None:
+        @staticmethod
+        def validate(init_parameters: Dict[str, Any]) -> None:
             pass
 
     action = Action(10)
