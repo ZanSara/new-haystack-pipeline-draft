@@ -35,11 +35,18 @@ dependencies = [
   "networkx",  # Pipeline graphs
   "numpy",     # Embeddings and scores
   "mmh3",      # Fast hashing function for Document ids
-
+  "tqdm",      # Progress bars
 
 ]
 
 [project.optional-dependencies]
+others = [
+
+  "torch",  # Running local models
+
+  "rank_bm25"  # BM25 support for MemoryDocumentStore
+
+]
 dev = [
   "pre-commit",
   "mypy",
