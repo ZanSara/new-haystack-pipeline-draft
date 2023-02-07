@@ -5,11 +5,11 @@ requires = [
 build-backend = "hatchling.build"
 
 [project]
-name = "haystack-module-example"
+name = "new-haystack"
 dynamic = [
   "version",
 ]
-description = "Haystack Module Example"
+description = "Haystack 2.0"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -25,14 +25,22 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-  # "new-haystack"
+  "networkx",  # Pipeline graphs
+  "numpy",     # Embeddings and scores
+  "mmh3",      # Fast hashing function for Document ids
+  "tqdm",      # Progress bars
+
+]
+
+[project.optional-dependencies]
+others = [
+  "torch",  # Running local models
+  "pygraphviz", # To draw pipelines
+  "rank_bm25"  # BM25 support for MemoryDocumentStore
 ]
 dev = [
   "pre-commit",
@@ -43,6 +51,8 @@ dev = [
   "pytest-custom_exit_code",  # used in the CI
   "coverage",
 ]
+all = ["new-haystack[others,dev]"]
+
 
 # [project.urls]
 # "CI: GitHub" = "https://github.com/deepset-ai/haystack/actions"

@@ -2,7 +2,7 @@ from typing import Dict, List, Any
 
 import logging
 
-from haystack.actions import haystack_action
+from new_haystack.actions import haystack_action
 
 
 logger = logging.getLogger(__name__)
