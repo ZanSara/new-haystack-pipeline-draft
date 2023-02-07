@@ -1,4 +1,4 @@
-from typing import Literal, Dict, Generator
+from typing import Literal, Generator
 
 import re
 import logging

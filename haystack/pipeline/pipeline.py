@@ -37,6 +37,7 @@ class Pipeline:
         Searches for actions into the modules listed by `search_actions_in`. To prevent the action search,
         set `search_actions_in=[]`, but remember to set it later or the pipeline will be unable to load any action.
         """
+        self.stores = {}
         self.available_actions = {}
         self.search_actions_in = search_actions_in if search_actions_in is not None else DEFAULT_SEARCH_MODULES
 
@@ -99,6 +100,15 @@ class Pipeline:
         with open(path, "w") as f:
             yaml.dump(nx.node_link_data(_graph), f)
         logger.debug("Pipeline saved to %s.", path)
+
+    def connect_store(self, name: str, store: Any) -> None:
+        self.stores[name] = store
+
+    def list_stores(self) -> Iterable[str]:
+        return self.stores.keys()
+
+    def disconnect_store(self, name: str) -> None:
+        del self.stores[name]
 
     def add_node(self, name: str, action: Callable[..., Any], parameters: Optional[Dict[str, Any]] = None) -> None:
         """
@@ -212,24 +222,8 @@ class Pipeline:
         with_debug_info: bool = False,
     ) -> Dict[str, Any]:
         """
-
-        data = {
-            "documents": [Doc(), Doc()...],
-            "files": [path.txt, path2.txt, ...],
-            ...
-        }
-
-        parameters = {
-            "node_1": {
-                "param_1": 1,
-                "param_2": 2,
-            }
-            "node_2": {
-                "param_1": 1,
-                "param_2": 3,
-            }
-            ...
-        }
+        Runs the pipeline
+        
         """
         if not parameters:
             parameters = {}
@@ -273,7 +267,7 @@ class Pipeline:
             node_name, node_names = node_names[0], node_names[1:]
 
             # Make sure all expected input nodes have run. Sometimes with branched pipelines where a
-            # branch is longet than the other, the merging node might be called before the long
+            # branch is longer than the other, the merging node might be called before the long
             # branch had time to run. In this case we skip the merge node.
             # NOTE: the merge node can be removed from node_names, because it will be added again
             # then the longer branch's last node is called.
@@ -314,7 +308,7 @@ class Pipeline:
                 logger.info("* Running %s", node_name)
                 out_dict: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]]
                 out_dict = node_action(
-                    name=node_name, data=input_data, parameters=input_params, outgoing_edges=outgoing_edges_names
+                    name=node_name, data=input_data, parameters=input_params, outgoing_edges=outgoing_edges_names, stores=self.stores
                 )
             except Exception as e:
                 logger.debug(

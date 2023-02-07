@@ -1,5 +1,4 @@
 
-
 class StoreError:
     pass
 
@@ -9,10 +8,8 @@ class DuplicateError(StoreError):
 class MissingItemError(StoreError):
     pass
 
-
 class MissingEmbeddingError(StoreError):
     pass
-
 
 class IndexFullError(StoreError):
     pass

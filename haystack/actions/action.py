@@ -14,14 +14,48 @@ def haystack_action(callable):
     Bare minimum setup for Haystack actions. Any callable decorated with @haystack_action
     can be picked up by `find_actions` and be used in a Pipeline, serialized, deserialized, etc.
 
-    Expects the following signature:
+    Pipelines expects the following signature:
 
-        `def my_action(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str])`
+        `def my_action(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str], stores: Dict[str, Any])`
 
-    If the callable is a clas, the method used is `run`, which is expected to have the same signature
+    If the callable is a class, the method used is `run`, which is expected to have the same signature
     plus a `self` argument at the start.
 
-    Expects the following output:
+    Inputs have the following shape:
+    ```
+        data = {
+            "documents": [Doc(), Doc()...],
+            "files": [path.txt, path2.txt, ...],
+            ...
+        }
+
+        parameters = {
+            "node_1": {
+                "param_1": 1,
+                "param_2": 2,
+            }
+            "node_2": {
+                "param_1": 1,
+                "param_2": 3,
+            }
+            ...
+        }
+
+        outgoing_edges = [
+            "edge_1",
+            "another_edge",
+            ...
+        ]
+
+        stores = {
+            "my happy documents": <MemoryDocumentStore instance>,
+            "testest-labels": <ESLabelStore instance>,
+            "files": <S3FileStore instance>,
+            ...
+        }
+    ```
+    
+    Pipelines expects the following output:
 
         `{output_edge: (relevant_data, relevant_parameters) for output_edge in output_edges}`
 
@@ -77,6 +111,9 @@ def haystack_simple_action(callable):
 
     Actions created with this decorator can output on one edge only. For nodes that can output on
     multiple edges, see @haystack_node.
+
+    Actions created with this decorator can't access the stores dictionary. For nodes that can access them,
+    see @haystack_node.
     """
     logger.debug("Registering %s as a Haystack simple action", callable)
 
@@ -87,7 +124,7 @@ def haystack_simple_action(callable):
         run_method = callable.run
 
         @wraps(run_method)
-        def run_wrapper(self, name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str]):
+        def run_wrapper(self, name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str], stores: Dict[str, Any]):
             if outgoing_edges and any(edge != DEFAULT_EDGE_NAME for edge in outgoing_edges):
                 raise ActionError("'haystack_simple_action' can only output to one edge")
             output = run_method(self, **relevant_arguments(run_method, name, data, parameters)) or {}
