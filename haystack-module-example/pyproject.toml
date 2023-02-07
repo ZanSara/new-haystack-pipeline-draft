@@ -1,0 +1,97 @@
+[build-system]
+requires = [
+  "hatchling>=1.8.0",
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "haystack-module-example"
+dynamic = [
+  "version",
+]
+description = "Haystack Module Example"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+  { name = "deepset.ai" },
+]
+keywords = []
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Science/Research",
+  "License :: Freely Distributable",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "farm-haystack"
+]
+dev = [
+  "pre-commit",
+  "mypy",
+  "pylint==2.15.10",
+  "black[jupyter]==22.6.0",
+  "pytest",
+  "pytest-custom_exit_code",  # used in the CI
+  "coverage",
+]
+
+# [project.urls]
+# "CI: GitHub" = "https://github.com/deepset-ai/haystack/actions"
+# "Docs: RTD" = "https://haystack.deepset.ai/overview/intro"
+# "GitHub: issues" = "https://github.com/deepset-ai/haystack/issues"
+# "GitHub: repo" = "https://github.com/deepset-ai/haystack"
+# Homepage = "https://github.com/deepset-ai/haystack"
+
+[tool.hatch.version]
+path = "VERSION.txt"
+pattern = "(?P<version>.+)"
+
+# [tool.hatch.build.targets.sdist]
+# include = [
+#   "/haystack",
+#   "/VERSION.txt",
+# ]
+
+# [tool.hatch.build.targets.wheel]
+# packages = [
+#   "haystack",
+# ]
+
+[tool.black]
+line-length = 120
+skip_magic_trailing_comma = true  # For compatibility with pydoc>=4.6, check if still needed.
+
+
+[tool.pylint.'MESSAGES CONTROL']
+max-line-length=120
+disable = []
+
+[tool.pylint.'DESIGN']
+max-args=7
+
+[tool.pylint.'SIMILARITIES']
+min-similarity-lines=3
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--strict-markers"
+markers = [
+  "unit: unit tests",
+  "integration: integration tests",
+]
+log_cli = true
+
+[tool.mypy]
+warn_unused_configs = true
+plugins = [
+  "pydantic.mypy",
+]
