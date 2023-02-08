@@ -1,4 +1,4 @@
-from typing import Dict, Any, Callable, List, Iterable, Union
+from typing import Dict, Any, Callable, List, Iterable, Union, Set
 
 from itertools import chain
 import sys
@@ -296,3 +296,24 @@ def cool_down(graph: nx.DiGraph()) -> None:
             raise PipelineSerializationError(
                 f"Couldn't serialize this action's parameters: {name}"
             )
+
+
+def prune_branch(pruned_node: str, merge_nodes: Dict[str, Set[str]], graph: nx.DiGraph):
+
+    outgoing_data = graph.edges.data(nbunch=[pruned_node])
+    if outgoing_data:
+        outgoing_nodes = [data[1] for data in outgoing_data]
+        
+        for node in outgoing_nodes:
+            # Check if this node receives input on multiple edges.
+            # If it receives input from many edges, prune only the edge coming from this node.
+            if node in merge_nodes.keys():
+                merge_nodes[node] = {edge for edge in merge_nodes[node] if edge != pruned_node}
+
+                if merge_nodes[node]:
+                    # the node still has incoming edges: don't prune, stop here
+                    return merge_nodes
+
+            merge_nodes = prune_branch(node, merge_nodes, graph)
+    
+    return merge_nodes

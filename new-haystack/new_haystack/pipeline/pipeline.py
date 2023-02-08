@@ -20,6 +20,7 @@ from new_haystack.pipeline._utils import (
     is_cold,
     warm_up,
     cool_down,
+    prune_branch,
 )
 
 
@@ -337,6 +338,22 @@ class Pipeline:
                     [],
                     [DEFAULT_EDGE_NAME],
                 )
+            
+            # If there's no input data, this means that all the incoming edges were
+            # pruned (the nodes did not return anything on them). In this case, the
+            # node shouldn't run. In addition, we need to mark this branch of the pipeline
+            # as pruned, or potential downstream nodes taking input from here will wait 
+            # forever for the pruned nodes to be executed.
+            if not input_data:
+                logging.info(
+                    "Node %s has been pruned out. "
+                    "It won't run, along with any node receiving input uniquely from it.",
+                    node_name
+                )
+                merge_nodes = prune_branch(node_name, merge_nodes, self.graph)
+                # for pruned_node in pruned_nodes:
+                #     inputs_buffer[pruned_node].append({"pruned": True})
+                continue
 
             # Get the node's callable
             node_action = self.graph.nodes[node_name]["action"]
