@@ -43,12 +43,10 @@ class Count:
 
 
 def test_pipeline_serialization(tmp_path):
-    pipe = Pipeline(search_actions_in=[__name__])
+    pipe = Pipeline()
 
-    counter = Count()  # Try message="Ciao" to see the validation kicking in
-    counter2 = Count(
-        message="bye"
-    )  # Try message="Ciao" to see the validation kicking in
+    counter = Count()  # Try message="Ciao" to see the validation
+    counter2 = Count(message="bye")  # Try message="Ciao" to see the validation
     pipe.add_node(name="counter1", action=counter)
     pipe.add_node(name="multiplier", action=multiply, parameters={"by": 1})
     pipe.add_node(name="counter2", action=counter)
@@ -70,6 +68,7 @@ def test_pipeline_serialization(tmp_path):
     pipe2 = Pipeline(tmp_path / "pipeline.yaml", search_actions_in=[__name__])
 
     new_results_no_params = pipe2.run(data={"value": 2})
+
     print(new_results_no_params)
     new_results_with_params = pipe2.run(
         data={"value": 3}, parameters={"multiplier": {"by": 2}}
@@ -79,6 +78,8 @@ def test_pipeline_serialization(tmp_path):
     assert results_no_params == new_results_no_params
     assert results_with_params == new_results_with_params
 
+
+    #assert False
 
 if __name__ == "__main__":
     test_pipeline_serialization(Path(__file__).parent)

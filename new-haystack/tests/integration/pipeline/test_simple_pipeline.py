@@ -1,5 +1,6 @@
 from typing import *
 from pathlib import Path
+from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
 from new_haystack.actions import *
@@ -34,7 +35,7 @@ def sum(first, second):
 
 
 def test_simple_pipeline(tmp_path):
-    pipeline = Pipeline(search_actions_in=[__name__])
+    pipeline = Pipeline()
     pipeline.add_node("add_one_1", add_one)
     pipeline.add_node("add_one_2", add_one)
     pipeline.add_node("add_one_3", add_one)
@@ -54,12 +55,10 @@ def test_simple_pipeline(tmp_path):
         },
         with_debug_info=False,
     )
-
-    from pprint import pprint
-
     pprint(results)
 
     assert results == {"first": 3, "second": 2, "sum": 5}
+
 
 
 if __name__ == "__main__":

@@ -1,12 +1,10 @@
-from typing import Dict, Any, Callable, List, Iterable
+from typing import Dict, Any, Callable, List, Iterable, Union
 
 from itertools import chain
 import sys
 import json
 import logging
 from inspect import getmembers, isclass, isfunction
-from collections import namedtuple
-from importlib import import_module
 
 import networkx as nx
 
@@ -45,22 +43,53 @@ def find_actions(modules_to_search: List[str]) -> Dict[str, Callable[..., Any]]:
 
     Returns a dictionary with the action name and the action itself.
     """
-    # no-op if the module was already imported
-    for module in modules_to_search:
-        import_module(module)
+    # # no-op if the module was already imported
+    # for module in modules_to_search:
+    #     import_module(module)
 
     actions = {}
     for search_module in modules_to_search:
         logger.debug("Searching for Haystack actions under %s...", search_module)
+
+        duplicate_names = []
         for _, entity in getmembers(
             sys.modules[search_module], lambda x: isfunction(x) or isclass(x)
         ):
-            try:
-                if hasattr(entity, "__haystack_action__"):
-                    logger.debug(" * Found action: %s", entity)
-                    actions[entity.__haystack_action__] = entity
-            except AttributeError as e:
-                pass
+            # It's a Haystack action
+            if hasattr(entity, "__haystack_action__"):
+
+                # Two actions were discovered with the same name - namespace them
+                if entity.__haystack_action__ in actions:
+                    other_entity = actions[entity.__haystack_action__]
+                    other_source_module = other_entity.__module__
+                    logger.info(
+                        "An action with the same name was found in two separate modules!\n"
+                        " - Action name: %s\n - Found in modules: '%s' and '%s'\n"
+                        "They both are going to be loaded, but you will need to use a namespace "
+                        "path (%s.%s and %s.%s respectively) to use them in your Pipeline YAML definitions.",
+                        entity.__haystack_action__,
+                        other_source_module,
+                        search_module,
+
+                        other_source_module,
+                        entity.__haystack_action__,
+                        search_module,
+                        entity.__haystack_action__,
+                    )
+                    duplicate_names.append(entity.__haystack_action__)
+
+                    # Add both actions as namespaced
+                    actions[f"{other_source_module}.{entity.__haystack_action__}"] = other_entity
+                    actions[f"{search_module}.{entity.__haystack_action__}"] = entity
+                    # Do not remove the non-namespaced one, so in the case of a third collision it geta detected properly
+
+                actions[entity.__haystack_action__] = entity
+                logger.debug(" * Found action: %s", entity)
+
+    # Now delete all remaining duplicates
+    for duplicate in duplicate_names:
+        del actions[duplicate]
+
     return actions
 
 
@@ -107,7 +136,7 @@ def merge(first_dict: Dict[str, Any], second_dict: Dict[str, Any]) -> Dict[str, 
 
 
 def validate(
-    graph: nx.DiGraph, available_actions: Dict[str, Callable[..., Any]]
+    graph: nx.DiGraph, available_actions: Dict[str, Dict[str, Union[str, Callable[..., Any]]]]
 ) -> None:
     """
     Makes sure the pipeline can run. Useful especially for pipelines loaded from file.
@@ -140,7 +169,9 @@ def validate(
         # Class Actions might implement a cls.validate() method to customize validation
         if isinstance(action, str) and isclass(available_actions[action]):
             # Cold node
-            # remember that validation does not occurr on warm nodes because they're already instantiated
+            # Remember that this type of validation does not occurr on warm nodes 
+            # because they're already instantiated (so they "must" be valid I assume)
+            # Correct the code if this assumption stops to hold
             if (
                 hasattr(available_actions[action], "validate")
                 and "init" in graph.nodes[node].keys()
@@ -176,7 +207,7 @@ def is_warm(graph: nx.DiGraph) -> bool:
 
 
 def warm_up(
-    graph: nx.DiGraph, available_actions: Dict[str, Callable[..., Any]]
+    graph: nx.DiGraph, available_actions: Dict[str, Dict[str, Union[str, Callable[..., Any]]]]
 ) -> None:
     """
     Prepares the pipeline for the first execution. Instantiates all
@@ -189,11 +220,10 @@ def warm_up(
                 graph.nodes[name]["action"] = available_actions[
                     graph.nodes[name]["action"]
                 ]
-
                 # If it's a class, check if it's reusable or needs instantiation
                 if isclass(graph.nodes[name]["action"]):
                     if "instance_id" in graph.nodes[name].keys():
-                        # ReusableL fish it out from the pool
+                        # ReusableL fish it out from the graph
                         graph.nodes[name]["action"] = graph.nodes[
                             graph.nodes[name]["instance_id"]
                         ]["action"]
@@ -202,7 +232,6 @@ def warm_up(
                         graph.nodes[name]["action"] = graph.nodes[name]["action"](
                             **graph.nodes[name]["init"] or {}
                         )
-
         except Exception as e:
             raise PipelineDeserializationError(
                 "Couldn't deserialize this action: " + name

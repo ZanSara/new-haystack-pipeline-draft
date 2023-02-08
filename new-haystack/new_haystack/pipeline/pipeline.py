@@ -37,30 +37,26 @@ class Pipeline:
         """
         Loads the pipeline from `path`, or creates an empty pipeline if no path is given.
 
-        Searches for actions into the modules listed by `search_actions_in`. To prevent the action search,
-        set `search_actions_in=[]`, but remember to set it later or the pipeline will be unable to load any action.
+        Searches for actions into the modules listed by `search_actions_in`. To narrow down the scope of the action search,
+        set `search_actions_in=[<only the modules I want to look into for actions>]`.
         """
         self.stores = {}
         self.extra_actions = extra_actions or {}
         self.available_actions = extra_actions or {}
-        self.search_actions_in = (
-            search_actions_in
-            if search_actions_in is not None
-            else ["new_haystack.actions", "__main__"] #[module for module in sys.modules.keys() if "haystack" in module]
-        )
-
+        self.search_actions_in = search_actions_in
+        
+        self.graph: nx.DiGraph
         if not path:
             logger.debug("Loading an empty pipeline")
             self.graph = nx.DiGraph()
         else:
             logger.debug("Loading pipeline from %s...", path)
             with open(path, "r") as f:
-                self.graph: nx.DiGraph = nx.node_link_graph(yaml.safe_load(f))
+                self.graph = nx.node_link_graph(yaml.safe_load(f))
             logger.debug(
                 "Pipeline edge list:\n - %s",
                 "\n - ".join([str(edge) for edge in nx.to_edgelist(self.graph)]),
             )
-
             if validation:
                 validate(self.graph, self.available_actions)
             else:
@@ -80,9 +76,9 @@ class Pipeline:
         self._search_actions_in = (
             search_modules
             if search_modules is not None
-            else ["haystack.actions", "__main__"]
+            else list(sys.modules.keys())
         )
-        self.available_actions = {**find_actions(search_modules), **self.extra_actions}
+        self.available_actions = {**find_actions(self._search_actions_in), **self.extra_actions}
 
     def validate(self):
         """
@@ -371,7 +367,7 @@ class Pipeline:
                     json.dumps(inputs_buffer, indent=4, default=str),
                 )
                 raise PipelineRuntimeError(
-                    f"{node_name} failed:\n\ndata={input_data}\n\nparameters={input_params}\n\noutgoing_edges={outgoing_edges}\n\n"
+                    f"{node_name} raised '{e.__class__.__name__}: {e}' \n\ndata={input_data}\n\nparameters={input_params}\n\noutgoing_edges={outgoing_edges}\n\n"
                     "See the stacktrace above for more information."
                 ) from e
 

@@ -2,6 +2,8 @@ from typing import *
 
 import logging
 from pathlib import Path
+from pprint import pprint
+
 
 from new_haystack.pipeline import Pipeline
 from new_haystack.actions import *
@@ -49,7 +51,7 @@ def sum(first, second):
 
 
 @haystack_simple_action
-class Count:
+class CountAction:
     def __init__(self, starting_count=0):
         self.counter = starting_count
 
@@ -59,9 +61,9 @@ class Count:
 
 
 def test_many2many_pipeline(tmp_path):
-    counter = Count(starting_count=10)
+    counter = CountAction(starting_count=10)
 
-    pipeline = Pipeline(search_actions_in=[__name__])
+    pipeline = Pipeline()
     pipeline.add_node("input_count_1", counter)
     pipeline.add_node("input_count_2", counter)
     pipeline.add_node("output_count", counter)
@@ -124,8 +126,6 @@ def test_many2many_pipeline(tmp_path):
         },
         with_debug_info=False,
     )
-
-    from pprint import pprint
 
     pprint(results)
 
