@@ -5,7 +5,6 @@ import logging
 from copy import deepcopy
 import sys
 import yaml
-import json
 from collections import OrderedDict
 
 import networkx as nx
@@ -22,7 +21,6 @@ from new_haystack.pipeline._utils import (
     is_cold,
     warm_up,
     cool_down,
-    prune_branch,
 )
 
 
@@ -43,7 +41,7 @@ class Pipeline:
         Searches for actions into the modules listed by `search_actions_in`. To narrow down the scope of the action search,
         set `search_actions_in=[<only the modules I want to look into for actions>]`.
         """
-        self.stores = {}
+        self.stores: Dict[str, object] = {}
         self.extra_actions = extra_actions or {}
         self.available_actions = extra_actions or {}
         self.search_actions_in = search_actions_in
@@ -243,7 +241,6 @@ class Pipeline:
         graphviz.draw(path)
         logger.debug(f"Pipeline diagram saved at {path}")
 
-
     def run(
         self,
         data: Dict[str, Any],
@@ -274,29 +271,39 @@ class Pipeline:
             warm_up(graph=self.graph, available_actions=self.available_actions)
 
         #
-        # NOTES on the Pipeline.run() algorithm.
+        # NOTES on the Pipeline.run() algorithm
         #
         # Nodes are run as soon as an input for them appears in the inputs buffer.
-        # They are run in FIFO order by the OrderedDict when more than a node at
-        # once is present in the buffer (which means some branches are running in 
-        # parallel or that there are loops).
+        # When there's more than a node at once  in the buffer (which means some 
+        # branches are running in parallel or that there are loops) they are selected to 
+        # run in FIFO order by the `inputs_buffer` OrderedDict.
         #
-        # Inputs are labeled with the name of the node they're aimed to plus the name 
-        # of the edge they're coming from.
+        # Inputs are labeled with the name of the node they're aimed for, plus the name 
+        # of the edge they're coming from: 
+        # 
+        #   ````
+        #   inputs_buffer[target_node] = {
+        #       'source_node.output_edge': <node's input from this edge>,  
+        #       ... 
+        #   }
+        #   ```
         #
-        # Nodes should wait until all the input data has arrived before being run. 
+        # Nodes should wait until all the necessary input data has arrived before running. 
+        # If they're popped from the input_buffer before they're ready, they're put back in.
         # If the pipeline has branches of different length, it's possible that a node
-        # might have to wait a bit and "let otner nodes pass" before having all the 
+        # might have to wait a bit and "let other nodes pass" before having all the 
         # input data it needs.
+        #
         # However, if the node in question is in a loop, some node in the "waiting for"
-        # list might appear to be _downstream_ from them: therefore it can't be waited for!
+        # list might appear to be _downstream_: therefore it can't be waited for!
         #
         # So: nodes should wait only for all edges coming from **strictly upstream nodes**.
         # If there exists a path in the directed graph between the current node
         # and the expected input edge, do not wait for that input edge.
         #
         # Data access:
-        # - Name of the node       # self.graph.nodes.data()
+        # - Name of the node       # self.graph.nodes  (List[str])
+        # - Action of the node     # self.graph.nodes[node]["action"]
         # - Input nodes            # [e[0] for e in self.graph.in_edges(node, data=True)]
         # - Weight of input nodes  # [e[2]["weight"] for e in self.graph.in_edges(node, data=True)]
         # - Output nodes           # [e[1] for e in self.graph.out_edges(node, data=True)]
@@ -312,14 +319,14 @@ class Pipeline:
             inputs_buffer[node_name] = {"": {"data": data, "parameters": parameters, "weight": 1}}
 
         # Execution loop. We select the nodes to run by checking which keys are set in the
-        # inputs buffer, because if there's values under that key, that means that tne node
-        # might be ready to run.
+        # inputs buffer. If the key exists, the node might be ready to run.
         pipeline_results = {}
         while inputs_buffer:
-            node_name, node_inputs = inputs_buffer.popitem(last=False)
+            node_name, node_inputs = inputs_buffer.popitem(last=False)  # FIFO
                 
+            # *** LOOPS DETECTION ***
             # Let's first list all the edges the current node should be waiting for. As said above,
-            # we should be wait on all edges, save the downstream ones.
+            # we should be wait on all edges, except for the downstream ones.
             nodes_to_wait_for = {
                 f"{e[0]}.{e[2]['label']}"  # the first element of the edge (input node) with its relative label
                 for e in self.graph.in_edges(node_name, data=True)  # for all input edges
@@ -338,7 +345,9 @@ class Pipeline:
                 continue
             
             # We have all the input data we need to proceed.
-            # If there are multiple entries in the node_inputs buffer, let's merge them here
+            # If there are multiple entries in the node_inputs buffer, let's merge them here.
+            # Note that entries are sorted by weight because `merge()` lets the first parameter's
+            # values dominate in case of conflict. See merge() docstrings for details.
             input_data = {}
             input_params = {}
             node_inputs = sorted(node_inputs.values(), key=lambda x: x["weight"], reverse=True)
@@ -347,6 +356,8 @@ class Pipeline:
                 input_params = merge(input_params, node_input["parameters"])
 
             # Check for default parameters and add them to the parameter's dictionary
+            # Default parameters are the one passed with the `pipeline.add_node()` method
+            # and have lower priority with respect to parameters passed through `pipeline.run()`.
             default_params = self.graph.nodes[node_name]["parameters"]
             if default_params:
                 input_params[node_name] = {
@@ -354,25 +365,50 @@ class Pipeline:
                     **parameters.get(node_name, {}),
                 }
 
-            # Get the node's callable
-            node_action = self.graph.nodes[node_name]["action"]
+            # List the output edges to pass to the action
+            output_edges = {e[2]["label"] for e in self.graph.out_edges(node_name, data=True)} or {DEFAULT_EDGE_NAME}
 
-            # Call the node
-            try:
-                logger.info("* Running %s", node_name)
-                node_results: Dict[str, Dict[str, Dict[str, Any]]]
-                node_results = node_action(
-                    name=node_name,
-                    data=input_data,
-                    parameters=input_params,
-                    outgoing_edges=list({e[2]["label"] for e in self.graph.out_edges(node_name, data=True)}) or [DEFAULT_EDGE_NAME],
-                    stores=self.stores,
-                )
-            except Exception as e:
-                raise PipelineRuntimeError(
-                    f"{node_name} raised '{e.__class__.__name__}: {e}' \n\ndata={input_data}\n\nparameters={input_params}\n\n"
-                    "See the stacktrace above for more information."
-                ) from e
+            # *** PRUNING ***
+            # If the input data is an empty dictionary, that means that the node has been pruned.
+            # Note the difference: if there's no key for this node in the buffer, or not all the expected
+            # input nodes are present in it, then the node needs to wait. Instead, if a key
+            # is present for all expected input edges but all of them are empty, that means that some
+            # decision node upstream has selected a branch that does not include this node, and therefore
+            # this node should not run. It should be "skipped" without blocking any other node downstream that
+            # might be waiting for their output.
+            #
+            # The typical case of pruning is a classifier. In indexing, classifiers might send a specific file 
+            # to a specific converter and later, all converters would send the documents to a PreProcessor.
+            # We want all converters that did not receive documents to:
+            # - not run
+            # - signal PreProcessor not to wait for them.
+            #
+            # This is called pruning.
+            # 
+            # TL:DR; Pruned nodes should:
+            # - not run
+            # - prune all their outgoing edges by propagating the empty input data
+            node_results: Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]]
+            if not input_data:
+                # Prune the node and all the downstream ones
+                node_results = {output_edge: ({}, {}) for output_edge in output_edges}
+            else:
+                # Call the node
+                node_action = self.graph.nodes[node_name]["action"]
+                try:
+                    logger.info("* Running %s", node_name)
+                    node_results = node_action(
+                        name=node_name,
+                        data=input_data,
+                        parameters=input_params,
+                        outgoing_edges=output_edges,
+                        stores=self.stores,
+                    )
+                except Exception as e:
+                    raise PipelineRuntimeError(
+                        f"{node_name} raised '{e.__class__.__name__}: {e}' \n\ndata={input_data}\n\nparameters={input_params}\n\n"
+                        "See the stacktrace above for more information."
+                    ) from e
 
             if not self.graph.out_edges(node_name):
                 # If there are no output edges, the output of this node is the output of the pipeline
@@ -390,13 +426,25 @@ class Pipeline:
                     source_edge = edge_data[2]['label']
                     target_node = edge_data[1]
 
+                    if not source_edge in node_results.keys() and nx.has_path(self.graph, target_node, node_name):
+                        # Corner case: pruning by passing an empty dict doesn't play well in loops.
+                        # Such nodes must be removed from the input buffer completely.
+                        continue
+                    
+                    # In all other cases, either populate the buffer or prune by adding an empty dict
+                    if not target_node in inputs_buffer:
+                        inputs_buffer[target_node] = {}
                     if source_edge in node_results.keys():
-                        if not target_node in inputs_buffer:
-                            inputs_buffer[target_node] = {}
                         inputs_buffer[target_node][f"{source_node}.{source_edge}"] = {
                             "data": node_results[source_edge][0], 
                             "parameters": node_results[source_edge][1], 
                             "weight": edge_data[2]['weight']
+                        }
+                    else:
+                        inputs_buffer[target_node][f"{source_node}.{source_edge}"] = {
+                            "data": {},
+                            "parameters": {},
+                            "weight": 0
                         }
 
         logger.info("Pipeline executed successfully.")

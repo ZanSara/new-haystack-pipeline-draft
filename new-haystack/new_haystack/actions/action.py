@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, Set
 from functools import wraps
 import logging
 import inspect
@@ -21,7 +21,7 @@ def haystack_action(callable):
 
     Pipelines expects the following signature:
 
-        `def my_action(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: List[str], stores: Dict[str, Any])`
+        `def my_action(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: Set[str], stores: Dict[str, Any])`
 
     If the callable is a class, the method used is `run`, which is expected to have the same signature
     plus a `self` argument at the start.
@@ -46,11 +46,11 @@ def haystack_action(callable):
             ...
         }
 
-        outgoing_edges = [
+        outgoing_edges = {    # Note: it's a set!
             "edge_1",
             "another_edge",
             ...
-        ]
+        }
 
         stores = {
             "my happy documents": <MemoryDocumentStore instance>,
@@ -138,7 +138,7 @@ def haystack_simple_action(callable):
             name: str,
             data: Dict[str, Any],
             parameters: Dict[str, Any],
-            outgoing_edges: List[str],
+            outgoing_edges: Set[str],
             stores: Dict[str, Any],
         ):
             if outgoing_edges and any(
@@ -212,7 +212,7 @@ def haystack_simple_action(callable):
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         if outgoing_edges and any(edge != DEFAULT_EDGE_NAME for edge in outgoing_edges):

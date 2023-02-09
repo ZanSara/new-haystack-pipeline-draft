@@ -16,16 +16,17 @@ def even_number_classifier(
     name: str,
     data: Dict[str, Any],
     parameters: Dict[str, Any],
-    outgoing_edges: List[str],
+    outgoing_edges: Set[str],
     stores: Dict[str, Any],
 ):
-    if len(outgoing_edges) != 2:
-        raise ActionError("This action needs exactly two output nodes to work.")
+    print(outgoing_edges)
+    if outgoing_edges != {"even", "odd"}:
+        raise ActionError("Connect both edges 'even' and 'odd'.")
 
     if data["value"] % 2 == 0:
-        return {outgoing_edges[0]: (data, parameters)}
+        return {"even": (data, parameters)}
     else:
-        return {outgoing_edges[1]: (data, parameters)}
+        return {"odd": (data, parameters)}
 
 
 @haystack_simple_action

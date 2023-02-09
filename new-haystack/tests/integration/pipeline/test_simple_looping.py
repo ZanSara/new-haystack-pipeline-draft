@@ -22,7 +22,7 @@ def below_ten(
     if set(outgoing_edges) != {"above_ten", "below_ten"}:
         raise ActionError("This action needs 'above_ten' and 'below_ten' edges.")
 
-    if data["value"] < 10:
+    if data["value"] < 3:
         print("---> Below ten!")
         return {"below_ten": (data, parameters)}
     else:
