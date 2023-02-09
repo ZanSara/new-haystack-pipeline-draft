@@ -260,6 +260,16 @@ class Pipeline:
         """
         Runs the pipeline
         """
+        #
+        # Idea for the future
+        #
+        # Right now, pipelines allow for loops. Loops make sense if any of the involved nodes
+        # is stateful, or if it loops over the same values in the pipeline context (like adding 1 
+        # to a value until it passes over a threshold). However, if the work is stateless, we should
+        # add the possibility to unwrap these loops and transforms them into a arbitrary number of replicas
+        # of the same function. For example, loops consuming a queue would be spread over N nodes, one for each
+        # item of the queue.
+        #
         if not parameters:
             parameters = {}
 
