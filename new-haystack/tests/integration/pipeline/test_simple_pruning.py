@@ -43,7 +43,7 @@ def add_ten(value):
     return {"value": value + 10}
 
 
-def test_pruning_pipeline(tmp_path):
+def test_simple_pruning(tmp_path):
     pipeline = Pipeline()
     pipeline.add_node("classifier", even_number_classifier)
     pipeline.add_node("even_number", add_message, parameters={"message": "The number was even!"})
@@ -72,4 +72,4 @@ def test_pruning_pipeline(tmp_path):
 
 
 if __name__ == "__main__":
-    test_pruning_pipeline(Path(__file__).parent)
+    test_simple_pruning(Path(__file__).parent)

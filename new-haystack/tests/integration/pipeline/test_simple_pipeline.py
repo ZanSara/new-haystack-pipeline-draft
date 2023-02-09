@@ -18,6 +18,7 @@ def rename_data(
     outgoing_edges: List[str],
     stores: Dict[str, Any],
 ):
+    print(parameters)
     old_name = parameters[name]["old_name"]
     new_name = parameters[name]["new_name"]
     value = data.pop(old_name)

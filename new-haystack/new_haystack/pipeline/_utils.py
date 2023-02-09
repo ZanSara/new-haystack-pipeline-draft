@@ -150,6 +150,21 @@ def validate(
             "You can use Pipeline.draw() to visualize the graph, or inspect the Pipeline.graph object."
         )
 
+    # Check that the graph has starting nodes (nodes that take no input edges)
+    # FIXME This just needs very good documentation imho.
+    input_nodes = [
+        node
+        for node in graph.nodes
+        if not any(edge[1] == node for edge in graph.edges.data())
+    ]
+    if not input_nodes:
+        raise PipelineValidationError(
+            "This pipeline doesn't seem to have starting nodes. "
+            "Haystack checks for nodes that receive no input as starting nodes. "
+            "If the first node of your pipeline is involved in a loop, please add a small no-op node "
+            "in front of it to point Haystack towards the correct start of your graph."
+        )
+
     for node in graph.nodes:
         action = graph.nodes[node]["action"]
 
@@ -207,7 +222,7 @@ def is_warm(graph: nx.DiGraph) -> bool:
 
 
 def warm_up(
-    graph: nx.DiGraph, available_actions: Dict[str, Dict[str, Union[str, Callable[..., Any]]]]
+    graph: nx.DiGraph, available_actions: Dict[str, Dict[str,Callable[..., Any]]]
 ) -> None:
     """
     Prepares the pipeline for the first execution. Instantiates all
