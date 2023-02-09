@@ -2,7 +2,7 @@ from typing import Optional
 
 from math import inf
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -26,7 +26,7 @@ class Document(Data):
     id_hash_keys are referring to keys in the meta.
     """
     score: Optional[float] = None
-    embedding: Optional[np.ndarray] = None
+    embedding: Optional[np.ndarray] = field(default=lambda:None, repr=False)
 
     def __lt__(self, other):
         if not hasattr(other, "score"):
@@ -44,17 +44,17 @@ class Document(Data):
 
 
 @dataclass(frozen=True, kw_only=True)
-class TextDocument(TextData):
+class TextDocument(TextData, Document):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class TableDocument(TableData):
+class TableDocument(TableData, Document):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class ImageDocument(ImageData):
+class ImageDocument(ImageData, Document):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class AudioDocument(AudioData):
+class AudioDocument(AudioData, Document):
     pass

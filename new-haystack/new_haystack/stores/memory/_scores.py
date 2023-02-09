@@ -85,7 +85,7 @@ def get_scores_torch(
 # TODO can we process several queries at once? We should be able to!
 def get_scores_numpy(
     query: np.ndarray,
-    documents: Iterable[np.ndarray],
+    documents: np.ndarray,
     similarity: str,
 ) -> Iterable[float]:
     """

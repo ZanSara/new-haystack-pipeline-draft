@@ -3,7 +3,7 @@ from typing import Literal, Generator
 import re
 import logging
 
-import tqdm
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,8 @@ class BM25Representation:
         :param documents: a generator returning all the documents in the docstore
         """
         tokenized_corpus = []
+
+        # TODO Enable/disable progress bar
         for doc in tqdm(
             documents, unit=" docs", desc="Updating BM25 representation..."
         ):

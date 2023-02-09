@@ -16,10 +16,10 @@ def store_documents(
     outgoing_edges: List[str],
     stores: Dict[str, Any],
 ):
-    input_variable_name = parameters.get("documents", "documents")
-    store_name = parameters.get("store_name", "documents")
-    index = parameters.get("index", "documents")
-    duplicates = parameters.get("duplicates", "overwrite")
+    input_variable_name = parameters.get(name, {}).get("documents", "documents")
+    store_name = parameters.get(name, {}).get("store_name", "documents")
+    index = parameters.get(name, {}).get("index", "documents")
+    duplicates = parameters.get(name, {}).get("duplicates", "overwrite")
 
     # FIXME Fail or log?
     if not input_variable_name in data.keys():

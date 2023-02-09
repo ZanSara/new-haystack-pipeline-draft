@@ -29,6 +29,7 @@ class Data:
     id_hash_keys are referring to keys in the meta.
     """
     id: str = field(default_factory=str)
+    content: Any = field(default_factory=lambda: None)
     content_type: ContentTypes
     meta: Dict[str, Any] = field(default_factory=dict)
     id_hash_keys: List[str] = field(default_factory=list)

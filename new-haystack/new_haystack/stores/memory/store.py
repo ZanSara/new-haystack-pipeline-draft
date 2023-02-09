@@ -150,7 +150,7 @@ class MemoryStore:
         :return: None
         """
         for item in items:
-            if self.has_item(item["id"]):
+            if self.has_item(item["id"], index=index):
                 if duplicates == "fail":
                     raise DuplicateError(
                         f"ID {item['id']} already exists in index '{index}'."

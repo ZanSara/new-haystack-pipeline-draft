@@ -11,6 +11,10 @@ except ImportError as e:
     logger.debug("torch not found, it won't be imported.")
 
 
+
+#
+# TODO Refactor!!!
+#
 def initialize_device_settings(
     use_cuda: Optional[bool] = None,
     local_rank: int = -1,

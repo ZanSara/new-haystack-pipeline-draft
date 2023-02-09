@@ -25,7 +25,6 @@ class Answer(Data):
     id_hash_keys are referring to keys in the meta.
     """
     score: Optional[float] = None
-    embedding: Optional[np.ndarray] = None
 
     def __lt__(self, other):
         if not hasattr(other, "score"):
@@ -43,17 +42,17 @@ class Answer(Data):
 
 
 @dataclass(frozen=True, kw_only=True)
-class TextAnswer(TextData):
+class TextAnswer(TextData, Answer):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class TableAnswer(TableData):
+class TableAnswer(TableData, Answer):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class ImageAnswer(ImageData):
+class ImageAnswer(ImageData, Answer):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class AudioAnswer(AudioData):
+class AudioAnswer(AudioData, Answer):
     pass

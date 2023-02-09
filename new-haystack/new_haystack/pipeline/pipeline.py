@@ -13,7 +13,7 @@ from networkx.drawing.nx_agraph import to_agraph
 from new_haystack.actions._utils import DEFAULT_EDGE_NAME
 from new_haystack.pipeline._utils import (
     PipelineRuntimeError,
-    PipelineError,
+    NoSuchStoreError,
     merge,
     find_actions,
     validate as validate,
@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 
 class Pipeline:
+    """
+    Core loop of a Haystack application.
+    """
+    
     def __init__(
         self,
         path: Optional[Path] = None,
@@ -113,11 +117,17 @@ class Pipeline:
             yaml.dump(nx.node_link_data(_graph), f)
         logger.debug("Pipeline saved to %s.", path)
 
-    def connect_store(self, name: str, store: Any) -> None:
+    def connect_store(self, name: str, store: object) -> None:
         self.stores[name] = store
 
     def list_stores(self) -> Iterable[str]:
         return self.stores.keys()
+
+    def get_store(self, name: str) -> object:
+        try:
+            return self.stores[name]
+        except KeyError as e:
+            raise NoSuchStoreError(f"No store named '{name}' is connected to this pipeline.") from e
 
     def disconnect_store(self, name: str) -> None:
         del self.stores[name]
@@ -397,6 +407,7 @@ class Pipeline:
                 node_action = self.graph.nodes[node_name]["action"]
                 try:
                     logger.info("* Running %s", node_name)
+                    logger.debug("Data:\n%s\n\nParameters:\n%s\n", input_data, input_params)
                     node_results = node_action(
                         name=node_name,
                         data=input_data,

@@ -1,7 +1,7 @@
 from typing import Optional
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -23,21 +23,21 @@ class Query(Data):
 
     id_hash_keys are referring to keys in the meta.
     """
-    embedding: Optional[np.ndarray] = None
+    embedding: Optional[np.ndarray] = field(default=lambda:None, repr=False)
 
 
 @dataclass(frozen=True, kw_only=True)
-class TextQuery(TextData):
+class TextQuery(TextData, Query):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class TableQuery(TableData):
+class TableQuery(TableData, Query):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class ImageQuery(ImageData):
+class ImageQuery(ImageData, Query):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class AudioQuery(AudioData):
+class AudioQuery(AudioData, Query):
     pass

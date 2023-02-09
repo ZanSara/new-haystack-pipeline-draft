@@ -1,0 +1,1 @@
+from new_haystack.actions.retrieve.retrieve import retrieve_by_embedding_similarity

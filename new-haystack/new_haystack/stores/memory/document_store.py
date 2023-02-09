@@ -4,13 +4,13 @@ import logging
 
 import numpy as np
 
-from new_haystack.data import Document
+from new_haystack.data import Document, Query, TextDocument
 from new_haystack.models.device_management import initialize_device_settings
 
 from new_haystack.stores._utils import MissingEmbeddingError
 from new_haystack.stores.memory.store import MemoryStore
 from new_haystack.stores.memory._bm25 import BM25Representation, BM25RepresentationMissing
-from new_haystack.stores.memory._embedding_retrieval import (
+from new_haystack.stores.memory._scores import (
     get_scores_numpy,
     get_scores_torch,
     scale_to_unit_interval,
@@ -36,9 +36,8 @@ class MemoryDocumentStore:
         bm25_parameters: dict = {},
         use_gpu: bool = True,
         devices: Optional[List[Union[str, "torch.device"]]] = None,
-        progress_bar: bool = True,
     ):
-        self.document_store = MemoryStore(index="documents", progress_bar=progress_bar)
+        self.document_store = MemoryStore(index="documents")
 
         # For BM25 retrieval
         self.use_bm25 = use_bm25
@@ -207,15 +206,15 @@ class MemoryDocumentStore:
 
     def get_relevant_documents(
         self,
-        queries: Union[Iterable[str], Iterable[np.ndarray]],
-        filters: Dict[str, Any],
+        queries: List[Query],
+        filters: Optional[Dict[str, Any]] = None,
         top_k: int = 10,
         use_bm25: bool = True,
         similarity: str = "dot_product",
         scoring_batch_size: int = 500000,
         scale_score: bool = True,
         index: str = "documents",
-    ) -> Iterable[Query, List[Document]]:
+    ) -> Dict[str, List[Document]]:
         """
         Performs document retrieval, either by BM25, or by embedding, according to the input parameters.
 
@@ -231,11 +230,9 @@ class MemoryDocumentStore:
 
         # BM25 Retrieval
         if use_bm25:
-            if not isinstance(queries[0], str):
-                raise ValueError("To use BM25 retrieval, provide string queries.")
             relevant_documents = {}
             for query in queries:
-                relevant_documents[query] = self._bm25_retrieval(
+                relevant_documents[query.id] = self._bm25_retrieval(
                     query=query,
                     filters=filters,
                     top_k=top_k,
@@ -244,11 +241,7 @@ class MemoryDocumentStore:
             return relevant_documents
 
         # Embedding Retrieval
-        if not isinstance(queries[0], np.ndarray):
-            raise ValueError(
-                "To use embedding retrieval, provide only the embeddings for the queries."
-            )
-        return self._embedding_retrieval(
+        relevant_documents = self._embedding_retrieval(
             queries=queries,
             filters=filters,
             top_k=top_k,
@@ -257,18 +250,19 @@ class MemoryDocumentStore:
             batch_size=scoring_batch_size,
             scale_score=scale_score,
         )
+        return relevant_documents
 
     def _bm25_retrieval(
         self,
-        query: str,
+        query: Query,
         filters: Dict[str, Any],
         top_k: int,
         index: str,
-    ) -> Iterable[Document]:
+    ) -> List[Document]:
         """
         Performs BM25 retrieval using the rank_bm25 indexes.
         """
-        if query is None:
+        if query is None or not query.content:
             logger.info(
                 "You tried to perform retrieval on an empty query. No documents returned for it."
             )
@@ -284,7 +278,7 @@ class MemoryDocumentStore:
                 filters={**filters, "content_type": "text"}, index=index
             ),
         )
-        tokenized_query = self.bm25_tokenization_regex(query.lower())
+        tokenized_query = self.bm25[index].bm25_tokenization_regex(query.content.lower())
         docs_scores = self.bm25[index].bm25.get_scores(tokenized_query)
         most_relevant_ids = np.argsort(docs_scores)[::-1]
 
@@ -306,7 +300,7 @@ class MemoryDocumentStore:
             else:
                 document_data = self.document_store.get_item(id=id, index=index)
                 document_data["score"] = docs_scores[id]
-                doc = Document.from_dict(doc)
+                doc = TextDocument.from_dict(document_data)
 
                 yield doc
 
@@ -315,23 +309,31 @@ class MemoryDocumentStore:
 
     def _embedding_retrieval(
         self,
-        queries: List[np.ndarray],
+        queries: List[Query],
         filters: Dict[str, Any],
         top_k: int,
         index: str,
         similarity: str,
         batch_size: int,
         scale_score: bool,
-    ) -> Iterable[List[Dict[str, Any]], None, None]:
+    ) -> Dict[str, List[Document]]:
         """
         Performs retrieval by embedding.
         """
+        results: Dict[str, List[Document]] = {}
         for query in queries:
-            if query is None:
+            if query is None or not query.content:
                 logger.info(
-                    "You tried to perform retrieval on an empty query. No documents returned for it."
+                    "You tried to perform retrieval on an empty query (%s). No documents returned for it.", query
                 )
-                return []
+                results[query] = []
+                continue
+            if query.embedding is None:
+                raise MissingEmbeddingError(
+                    "You tried to perform retrieval by embedding similarity on a query without embedding (%s). "
+                    "Please compute the embeddings for all your queries before using this method.", 
+                    query
+                )
 
             filtered_documents = self.document_store.get_items(
                 index=index, filters=filters
@@ -341,6 +343,7 @@ class MemoryDocumentStore:
                     *[(doc["id"], doc["embedding"]) for doc in filtered_documents]
                 )
             except KeyError:
+                # FIXME make it actionable
                 raise MissingEmbeddingError(
                     "Some of the documents don't have embeddings. Use the Embedder to compute them."
                 )
@@ -348,18 +351,20 @@ class MemoryDocumentStore:
             # At this stage the iterable gets consumed.
             if self.device and self.device.type == "cuda":
                 scores = get_scores_torch(
-                    query=query,
+                    query=query.embedding,
                     documents=embeddings,
                     similarity=similarity,
                     batch_size=batch_size,
                     device=self.device,
                 )
             else:
+                embeddings = np.array(embeddings)
                 scores = get_scores_numpy(
-                    query, filtered_documents, similarity=similarity
+                    query.embedding, embeddings, similarity=similarity
                 )
 
-            top_k_ids = list(zip(ids, scores)).sort(
+            top_k_ids = sorted(
+                list(zip(ids, scores)),
                 key=lambda x: x[1] if x[1] is not None else 0.0, reverse=True
             )[:top_k]
 
@@ -369,7 +374,9 @@ class MemoryDocumentStore:
                 if scale_score:
                     score = scale_to_unit_interval(score, similarity)
                 document_data["score"] = score
-                document = Document.from_dict(dictionary=document_data)
+                document = TextDocument.from_dict(dictionary=document_data)
                 relevant_documents.append(document)
 
-            return relevant_documents
+            results[query.id] = relevant_documents
+
+        return results
