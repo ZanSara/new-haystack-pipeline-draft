@@ -6,13 +6,8 @@ import pytest
 
 from new_haystack.pipeline import (
     Pipeline,
-    PipelineDeserializationError,
-    PipelineError,
-    PipelineSerializationError,
-    PipelineValidationError,
-    validate,
 )
-from new_haystack.actions import haystack_action, ActionError, ActionValidationError
+from new_haystack.actions import haystack_action
 
 
 def test_bare_node_stateless_with_run_parameter_one_in_edge_many_out_edge_one_input_one_output():

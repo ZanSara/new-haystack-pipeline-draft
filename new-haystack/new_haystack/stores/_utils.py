@@ -1,8 +1,12 @@
-class StoreError:
+class StoreError(Exception):
     pass
 
 
 class DuplicateError(StoreError):
+    pass
+
+
+class MissingIndexError(StoreError):
     pass
 
 

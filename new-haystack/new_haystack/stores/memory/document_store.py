@@ -45,7 +45,7 @@ class MemoryDocumentStore:
         self.bm25_algorithm = (bm25_algorithm,)
         self.bm25_parameters = (bm25_parameters,)
         self.bm25_tokenization_regex = bm25_tokenization_regex
-        self.bm25 = None
+        self.bm25 = {}
         if use_bm25:
             self.bm25 = {
                 "documents": BM25Representation(
@@ -57,17 +57,17 @@ class MemoryDocumentStore:
 
         # For embedding retrieval
         self.device = None
-        devices, _ = initialize_device_settings(
+        init_devices, _ = initialize_device_settings(
             devices=devices, use_cuda=use_gpu, multi_gpu=False
         )
-        if devices:
-            if len(devices) > 1:
+        if init_devices:
+            if len(init_devices) > 1:
                 logger.warning(
                     "Multiple devices are not supported in %s inference, using the first device %s.",
                     self.__class__.__name__,
-                    devices[0],
+                    init_devices[0],
                 )
-            self.device = devices[0]
+            self.device = init_devices[0]
 
     def create_index(self, index: str, use_bm25: Optional[bool] = None):
         """
@@ -215,7 +215,7 @@ class MemoryDocumentStore:
         scoring_batch_size: int = 500000,
         scale_score: bool = True,
         index: str = "documents",
-    ) -> Iterable[List[Dict[str, Any]], None, None]:
+    ) -> Iterable[Query, List[Document]]:
         """
         Performs document retrieval, either by BM25, or by embedding, according to the input parameters.
 
@@ -315,7 +315,7 @@ class MemoryDocumentStore:
 
     def _embedding_retrieval(
         self,
-        queries: List[str],
+        queries: List[np.ndarray],
         filters: Dict[str, Any],
         top_k: int,
         index: str,
@@ -346,7 +346,7 @@ class MemoryDocumentStore:
                 )
 
             # At this stage the iterable gets consumed.
-            if self.device.type == "cuda":
+            if self.device and self.device.type == "cuda":
                 scores = get_scores_torch(
                     query=query,
                     documents=embeddings,

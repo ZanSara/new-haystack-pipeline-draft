@@ -13,15 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
-class Document(Data):
+class Answer(Data):
     """
-    Base data class containing some data to be queried.
+    Base data class containing an answer, its score and its metadata.
 
     Can contain text snippets, tables, file paths to images and audio files.
     Please use the subclasses for proper typing.
 
-    Documents can be sorted by score, serialized to/from dictionary and JSON,
-    and are immutable.
+    Answers can be sorted by score, serialized to/from dictionary and JSON and are immutable.
 
     id_hash_keys are referring to keys in the meta.
     """
@@ -44,17 +43,17 @@ class Document(Data):
 
 
 @dataclass(frozen=True, kw_only=True)
-class TextDocument(TextData):
+class TextAnswer(TextData):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class TableDocument(TableData):
+class TableAnswer(TableData):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class ImageDocument(ImageData):
+class ImageAnswer(ImageData):
     pass
 
 @dataclass(frozen=True, kw_only=True)
-class AudioDocument(AudioData):
+class AudioAnswer(AudioData):
     pass

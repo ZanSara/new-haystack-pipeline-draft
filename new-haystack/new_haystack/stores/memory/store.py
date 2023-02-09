@@ -3,10 +3,10 @@ from typing import Literal, Any, Dict, List, Optional, Iterable
 import logging
 
 from new_haystack.stores._utils import (
-    StoreError,
     DuplicateError,
     IndexFullError,
     MissingItemError,
+    MissingIndexError,
 )
 
 
@@ -14,13 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryStore:
+    """
+    Stores data in-memory, without persisting it anywhere. 
+    Ephemeral storage that can't (yet) be saved to disk in any way.
+    """
+
     def __init__(
         self,
         index: str,
-        progress_bar: bool = True,
     ):
         self.indexes: Dict[str, Dict[str, Any]] = {index: {}}
-        self.progress_bar = progress_bar
 
     def create_index(self, index: str, use_bm25: Optional[bool] = None) -> None:
         """
@@ -34,7 +37,7 @@ class MemoryStore:
         """
         Returns a list of all the indexes present in this store.
         """
-        return self.indexes.keys()
+        return list(self.indexes.keys())
 
     def delete_index(self, index: str, delete_populated_index: bool = False) -> None:
         """
@@ -45,7 +48,7 @@ class MemoryStore:
         :param delete_populated_index: whether to drop full indexes too
         :raises IndexFullError if the index is full and delete_populated_index=False
         """
-        items_count = self.count_items()
+        items_count = self.count_items(filters={}, index=index)
         if items_count > 0:
             if not delete_populated_index:
                 raise IndexFullError(
@@ -67,7 +70,7 @@ class MemoryStore:
         try:
             return id in self.indexes[index].keys()
         except IndexError as e:
-            raise StoreError(
+            raise MissingIndexError(
                 f"No index names {index}. Create it with .create_index()"
             ) from e
 
@@ -85,7 +88,7 @@ class MemoryStore:
                 raise MissingItemError(f"ID {id} not found in index {index}.")
             return self.indexes[index][id]
         except IndexError as e:
-            raise StoreError(
+            raise MissingIndexError(
                 f"No index names {index}. Create it with .create_index()"
             ) from e
 
@@ -111,7 +114,7 @@ class MemoryStore:
             for id in self.indexes[index].keys():
                 yield id
         except IndexError as e:
-            raise StoreError(
+            raise MissingIndexError(
                 f"No index names {index}. Create it with .create_index()"
             ) from e
 
@@ -124,8 +127,8 @@ class MemoryStore:
         :param filters: the filters to apply to the item list.
         :param index: in which index to look for this item.
         """
-        for doc in self.get_ids(filters=filters, index=index):
-            yield doc
+        for id in self.get_ids(filters=filters, index=index):
+            yield self.indexes[index][id]
 
     def write_items(
         self,
@@ -178,6 +181,6 @@ class MemoryStore:
             try:
                 del self.indexes[index][id]
             except IndexError as e:
-                raise StoreError(
+                raise MissingIndexError(
                     f"No index names {index}. Create it with .create_index()"
                 ) from e
