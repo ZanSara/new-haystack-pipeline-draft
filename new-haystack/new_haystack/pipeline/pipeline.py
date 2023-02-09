@@ -348,8 +348,8 @@ class Pipeline:
             # If there are multiple entries in the node_inputs buffer, let's merge them here.
             # Note that entries are sorted by weight because `merge()` lets the first parameter's
             # values dominate in case of conflict. See merge() docstrings for details.
-            input_data = {}
-            input_params = {}
+            input_data: Dict[str, Any] = {}
+            input_params: Dict[str, Any] = {}
             node_inputs = sorted(node_inputs.values(), key=lambda x: x["weight"], reverse=True)
             for node_input in node_inputs:
                 input_data = merge(input_data, node_input["data"])
@@ -426,12 +426,12 @@ class Pipeline:
                     source_edge = edge_data[2]['label']
                     target_node = edge_data[1]
 
+                    # Corner case: pruning by passing an empty dict doesn't play well in loops.
+                    # Such nodes must be removed from the input buffer completely.
                     if not source_edge in node_results.keys() and nx.has_path(self.graph, target_node, node_name):
-                        # Corner case: pruning by passing an empty dict doesn't play well in loops.
-                        # Such nodes must be removed from the input buffer completely.
                         continue
                     
-                    # In all other cases, either populate the buffer or prune by adding an empty dict
+                    # In all other cases, either populate the buffer or prune the downstream node by adding an empty dict
                     if not target_node in inputs_buffer:
                         inputs_buffer[target_node] = {}
                     if source_edge in node_results.keys():

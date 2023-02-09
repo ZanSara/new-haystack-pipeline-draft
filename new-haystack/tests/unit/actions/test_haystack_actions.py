@@ -14,11 +14,11 @@ def test_bare_node_stateless_missing_necessary_data():
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         return {
-            outgoing_edges[0]: (
+            list(outgoing_edges)[0]: (
                 {**data, "value": data["value"] + parameters["test_node"]["add"]},
                 parameters,
             )
@@ -40,11 +40,11 @@ def test_bare_node_stateless_missing_necessary_parameter(caplog):
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         return {
-            outgoing_edges[0]: (
+            list(outgoing_edges)[0]: (
                 {**data, "value": data["value"] + parameters["test_node"]["add"]},
                 parameters,
             )
@@ -71,10 +71,10 @@ def test_bare_node_stateless_parameterless_no_input_no_output():
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
-        return {outgoing_edges[0]: (data, parameters)}
+        return {list(outgoing_edges)[0]: (data, parameters)}
 
     # NOTE: we specify extra_actions here only because action is now an inner function
     # and does not get picked up by the automatic discovery. I consider it a reasonable
@@ -95,10 +95,10 @@ def test_bare_node_stateless_parameterless_one_input_one_output():
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
-        return {outgoing_edges[0]: ({**data, "value": data["value"] + 1}, parameters)}
+        return {list(outgoing_edges)[0]: ({**data, "value": data["value"] + 1}, parameters)}
 
     # NOTE: we specify extra_actions here only because action is now an inner function
     # and does not get picked up by the automatic discovery. I consider it a reasonable
@@ -119,11 +119,11 @@ def test_bare_node_stateless_parameterless_two_input_one_output():
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         return {
-            outgoing_edges[0]: (
+            list(outgoing_edges)[0]: (
                 {**data, "result": data["value"] + data["other_value"]},
                 parameters,
             )
@@ -149,11 +149,11 @@ def test_bare_node_stateless_parameterless_one_input_two_outputs():
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         return {
-            outgoing_edges[0]: (
+            list(outgoing_edges)[0]: (
                 {**data, "value+1": data["value"] + 1, "value+2": data["value"] + 2},
                 parameters,
             )
@@ -178,11 +178,11 @@ def test_bare_node_stateless_with_run_parameter_one_input_one_output():
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         return {
-            outgoing_edges[0]: (
+            list(outgoing_edges)[0]: (
                 {**data, "value": data["value"] + parameters["test_node"]["add"]},
                 parameters,
             )
@@ -205,11 +205,11 @@ def test_bare_node_stateless_with_run_parameter_one_input_one_output():
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         return {
-            outgoing_edges[0]: (
+            list(outgoing_edges)[0]: (
                 {**data, "value": data["value"] + parameters["test_node"]["add"]},
                 parameters,
             )
@@ -250,11 +250,11 @@ def test_bare_node_stateful_must_have_validate():
                 name: str,
                 data: Dict[str, Any],
                 parameters: Dict[str, Any],
-                outgoing_edges: List[str],
+                outgoing_edges: Set[str],
                 stores: Dict[str, Any],
             ):
                 self.counter += 1
-                return {outgoing_edges[0]: (data, parameters)}
+                return {list(outgoing_edges)[0]: (data, parameters)}
 
 
 def test_bare_node_stateful_dont_need_init():
@@ -265,10 +265,10 @@ def test_bare_node_stateful_dont_need_init():
             name: str,
             data: Dict[str, Any],
             parameters: Dict[str, Any],
-            outgoing_edges: List[str],
+            outgoing_edges: Set[str],
             stores: Dict[str, Any],
         ):
-            return {outgoing_edges[0]: (data, parameters)}
+            return {list(outgoing_edges)[0]: (data, parameters)}
 
         @staticmethod
         def validate(init_parameters: Dict[str, Any]) -> None:
@@ -297,11 +297,11 @@ def test_bare_node_stateful_no_init_no_input_no_output_no_validation():
             name: str,
             data: Dict[str, Any],
             parameters: Dict[str, Any],
-            outgoing_edges: List[str],
+            outgoing_edges: Set[str],
             stores: Dict[str, Any],
         ):
             self.counter += 1
-            return {outgoing_edges[0]: (data, parameters)}
+            return {list(outgoing_edges)[0]: (data, parameters)}
 
         @staticmethod
         def validate(init_parameters: Dict[str, Any]) -> None:
@@ -337,11 +337,11 @@ def test_bare_node_stateful_with_init_param_no_input_no_output_no_validation():
             name: str,
             data: Dict[str, Any],
             parameters: Dict[str, Any],
-            outgoing_edges: List[str],
+            outgoing_edges: Set[str],
             stores: Dict[str, Any],
         ):
             self.counter += 1
-            return {outgoing_edges[0]: (data, parameters)}
+            return {list(outgoing_edges)[0]: (data, parameters)}
 
         @staticmethod
         def validate(init_parameters: Dict[str, Any]) -> None:
@@ -377,12 +377,12 @@ def test_bare_node_stateful_one_input_one_output():
             name: str,
             data: Dict[str, Any],
             parameters: Dict[str, Any],
-            outgoing_edges: List[str],
+            outgoing_edges: Set[str],
             stores: Dict[str, Any],
         ):
             self.counter += data["value"]
             return {
-                outgoing_edges[0]: ({**data, "value": data["value"] + 3}, parameters)
+                list(outgoing_edges)[0]: ({**data, "value": data["value"] + 3}, parameters)
             }
 
         @staticmethod

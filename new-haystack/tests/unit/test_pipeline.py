@@ -21,7 +21,7 @@ def test_bare_node_stateless_with_run_parameter_one_in_edge_many_out_edge_one_in
         name: str,
         data: Dict[str, Any],
         parameters: Dict[str, Any],
-        outgoing_edges: List[str],
+        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
         return {
@@ -46,7 +46,7 @@ def test_bare_node_stateless_with_run_parameter_one_in_edge_many_out_edge_one_in
         outgoing_edges: List[str],
         stores: Dict[str, Any],
     ):
-        return {outgoing_edges[0]: (data, parameters)}
+        return {edge: (data, parameters) for edge in outgoing_edges}
 
     # NOTE: we specify extra_actions here only because action is now an inner function
     # and does not get picked up by the automatic discovery. I consider it a reasonable
