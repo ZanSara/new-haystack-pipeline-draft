@@ -305,7 +305,7 @@ Currently, at init time `Pipeline` scans the entire `sys.modules` looking for an
 
 Such search can be scoped down or directed elsewhere by setting the `search_actions_in` init parameter in `Pipeline`: however, all modules must be imported for the search to be successful. 
 
-Search also might fail in narrow corner cases: for example, inner functions are not discovered (classic care for tests). For these scenarios, Pipeline also accepts a `extra_actions` init parameter that allows users to explicitly provide a dictionary of actions to integrate with the other discovered actions.
+Search also might fail in narrow corner cases: for example, inner functions are not discovered (often the case in tests). For these scenarios, `Pipeline` also accepts a `extra_actions` init parameter that allows users to explicitly provide a dictionary of actions to integrate with the other discovered actions.
 
 Name collisions are handled by prefixing the action name with the name of the module it was imported from.
 
@@ -336,7 +336,7 @@ There are a number of drawbacks about the proposed approach:
 
 - Migration is going to be far from straightforward for us. Although many nodes can probably work with minor adaptations into the new system, it would be beneficial for most of them to be reduced to their `run()` method, especially indexing nodes. This means nodes need, at least, to be migrated one by one to the new system and code copied over.
 - Migration is going to be far from straightforward for the users: see Adoption strategy.
-- This system allows for pipelines with more complex topologies, which brings the risk of more corner cases. `Pipeline.run()` must be made very solid in order to avoid this scenarios.
+- This system allows for pipelines with more complex topologies, which brings the risk of more corner cases. `Pipeline.run()` must be made very solid in order to avoid this scenario.
 - Stateless actions need less upfront validation, but might more easily break while running due to unexpected inputs. While well designed nodes should internally check and deal with such situations, we might face larger amount of bugs due to our failure at spotting lack of checks for unexpected inputs at review time.
 - The entire system work on the assumption that actions are well behaving and respect both the contract and a number of "unspoken rules", like not touching other node's parameters unless necessary, pop their own input instead of letting it flow down the pipeline, etc. Malicious or otherwise "rude" actions can wreak havoc in `Pipeline`s very easily by messing with other action's parameters and inputs.
 
