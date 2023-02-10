@@ -1,4 +1,4 @@
-from typing import Dict, List, Any
+from typing import Dict, Set, Any
 
 import logging
 
@@ -13,7 +13,7 @@ def my_action(
     name: str,
     data: Dict[str, Any],
     parameters: Dict[str, Any],
-    outgoing_edges: List[str],
+    outgoing_edges: Set[str],
     stores: Dict[str, Any],
 ):
 

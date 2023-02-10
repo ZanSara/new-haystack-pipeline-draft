@@ -33,14 +33,15 @@ dependencies = [
   "numpy",     # Embeddings and scores
   "mmh3",      # Fast hashing function for Document ids
   "tqdm",      # Progress bars
-
 ]
 
 [project.optional-dependencies]
 others = [
   "torch",  # Running local models
-  "pygraphviz", # To draw pipelines
-  "rank_bm25"  # BM25 support for MemoryDocumentStore
+  "rank_bm25",  # BM25 support for MemoryDocumentStore
+  "matplotlib", # To draw pipelines
+  "netgraph", # To draw pipelines - no system deps, but fails on loops
+  "pygraphviz", # Requires graphviz
 ]
 dev = [
   "pre-commit",

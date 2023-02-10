@@ -13,6 +13,7 @@ from networkx.drawing.nx_agraph import to_agraph
 from new_haystack.actions._utils import DEFAULT_EDGE_NAME
 from new_haystack.pipeline._utils import (
     PipelineRuntimeError,
+    PipelineError,
     NoSuchStoreError,
     merge,
     find_actions,
@@ -232,24 +233,63 @@ class Pipeline:
         return self.graph.nodes[candidates[0]]
 
     # TODO later
-    def concatenate(self, pipeline, input_edge, output_edge):
-        # Watch out, Pipelines might have N input actions and M output actions!
-        # One might need to specify to-from which edge to concatenate!
+    def connect_pipeline(self, pipeline, input_edge, output_edge):
+        # Watch out, Pipelines might have N input actions and M output actions.
+        # One might need to specify to-from which edge to concatenate
         pass
 
-    def draw(self, path: Path) -> None:
-        try:
-            import pygraphviz
-        except ImportError:
-            raise ImportError(
-                "Could not import `pygraphviz`. Please install via: \n"
-                "pip install pygraphviz\n"
-                "(You might need to run this first: apt install libgraphviz-dev graphviz )"
+    def draw(self, path: Optional[Path] = None, graphviz: bool = True) -> None:
+        """
+        Draws the pipeline. If path is not given, shows an interactive plot
+        in a matplotlib window.
+        """
+
+        if graphviz:
+            try:
+                import pygraphviz
+            except ImportError:
+                raise ImportError(
+                    "Could not import `pygraphviz`. Please install via: \n"
+                    "pip install pygraphviz\n"
+                    "(You might need to run this first: apt install libgraphviz-dev graphviz )"
+                )
+            graphviz = to_agraph(self.graph)
+            graphviz.layout("dot")
+            graphviz.draw(path)
+            logger.debug(f"Pipeline diagram saved at {path}")
+
+        else:
+            try:
+                import matplotlib.pyplot as plt
+                from netgraph import InteractiveGraph
+            except (ImportError, ModuleNotFoundError) as e:
+                raise PipelineError("Failed to import some of the drawing libraries! Can't draw this pipeline.") from e
+                
+            plot_instance = InteractiveGraph(
+                self.graph, 
+                node_size=2, 
+                node_layout="dot",
+                node_color="#ffffff00",
+                node_edge_color="#ffffff00",
+                node_labels=True, 
+                node_label_offset=0.0001,
+                node_label_fontdict={"backgroundcolor": "lightgrey"},
+                node_shape="o",
+                edge_width=1.,
+                edge_layout="curved",
+                edge_label_rotate=False,
+                edge_labels={(e[0], e[1]): e[2]["label"] for e in self.graph.edges(data=True)},            
+                edge_label_fontdict={"fontstyle": "italic", "color": "grey", "backgroundcolor": "#ffffff00"},
+                arrows=True, 
+                ax=None,
+                #scale=(10, 10)
             )
-        graphviz = to_agraph(self.graph)
-        graphviz.layout("dot")
-        graphviz.draw(path)
-        logger.debug(f"Pipeline diagram saved at {path}")
+
+            if not path:
+                plt.show()
+            else:
+                plt.savefig(path, bbox_inches='tight')
+                logger.debug(f"Pipeline diagram saved at {path}")
 
     def run(
         self,
