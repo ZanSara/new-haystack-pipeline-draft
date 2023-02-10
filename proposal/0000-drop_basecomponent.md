@@ -35,7 +35,7 @@ On top of these issues, there is the tangential issue of `DocumentStore`s and th
   - The relationship between `DocumentStore` and `Retriever` should be left as a topic for a separate proposal but kept in mind, because Retrievers currently act as the main interface for `DocumentStore`s into `Pipeline`s.
 
 This proposal tries to adress all the above point by taking a radical stance with:
-- A full reimplementation of the `Pipeline` class that does limit itself to DAGs, can run branches in parallel, can prune branches, and can process loops.
+- A full reimplementation of the `Pipeline` class that does not limit itself to DAGs, can run branches in parallel, can prune branches, and can process loops.
 - Dropping the concept of `BaseComponent` and introducing the concept of stateless `Action`s in its place.
 - Define a clear and flexible contract between `Pipeline` and the `Action`s, along with a simplified contract to ease the learning curve.
 - Define a clear place for `DocumentStore`s with respect to `Pipeline`s that doesn't forcefully involve `Retriever`s.
