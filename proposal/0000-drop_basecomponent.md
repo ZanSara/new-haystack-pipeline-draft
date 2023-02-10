@@ -285,7 +285,7 @@ def action(value, add, stores):
 ```
 - A simplified action that can return primitives instead of dictionaries and specify the output key in the decorator, like:
 ```python
-@haystack_very_simple_action("value")
+@haystack_very_simple_action(output_name="value")
 def action(value, add):
     return value + add
 ```
@@ -294,7 +294,7 @@ def action(value, add):
 @haystack_decision
 def action(value, threshold):
     if value > threshold:
-        return "above"  # name of the selected edge: data flows down unchanged
+        return "above"  # name of the selected edge: all the data flows down unchanged
     return "below"
 ```
 and so on.
