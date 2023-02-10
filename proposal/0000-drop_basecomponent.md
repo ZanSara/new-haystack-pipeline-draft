@@ -140,8 +140,8 @@ Therefore, the revised Pipeline object has the following API:
     - `add_node(name, action, parameters)`: adds a disconnected node to the graph.
         - Note here the distinction between a **node** (the graph entity) and an **action** (the function that processes the data).
         - `action` accepts callables, however: 
-            - Simple functions have to be decorated with either `@haystack_action` or `@haystack_simple_action` (to see why, check the implementation sample)
-            - Classes need also to be decorated with either of the above decorators and must have a `run()` method, to which all the same limitation as stateless actions apply depending on the decorator used. Optionally they can provide also a `validate()` method and define their own `__init__()`.
+            - Simple functions have to be decorated with either `@haystack_action` or `@haystack_simple_action` (see Action Contract below)
+            - Classes need also to be decorated with either of the above decorators and must have a `run()` method, to which all the same limitation as stateless actions apply depending on the decorator used. Optionally they can provide also a `validate()` method and define their own `__init__()` (see Action Contract below).
             See below for a more detailed discussion of the Actions' design.
     - `get_node(name)`: returns the node's information stored in the graph
     - `connect(nodes, weights)`: chains a series of nodes together, adding weights to the edges if given.
