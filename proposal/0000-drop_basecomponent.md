@@ -155,7 +155,7 @@ Therefore, the revised Pipeline object has the following API:
     - `cool_down()`: iterate over the nodes of the graph and replaces all actions, stateless or stateful, with their name in the known actions registry. A "cool" pipeline can't be run right away, but it's ready for serialization. Calling `run()` on a "cold" pipeline causes `warm_up()` to run first.
     - `__init__(path=None)`: if a path is given, loads the pipeline from the YAML found at that path. Note that at this stage Pipeline will collect actions from all imported modules (see the implementation - the search can be scoped down to selected modules) and **all actions are validated (see `validate()`) but not initialized**: therefore, `__init__` creates "cold" pipelines.
     - `save(path)`: serializes and saves the pipeline as a YAML at the given path. If the pipeline is not "cold", `cool_down()` is called first.
-    - `validate()`: iterate over the nodes of the graph to check whether `action` is present, as a string or as a callable, into the known actions registry. `validate()` works on "cold" pipelines.
+    - `validate()`: iterate over the nodes of the graph to check whether `action` is present, as a string or as a callable, into the known actions registry. `validate()` works on both "warm" pipelines, "cold" pipeines, and even pipelines in mixed states, without affecting it (so it doesn't need to call `warm_up()` or `cool_down()` to work).
 
 Example pipeline topologies supported by this new implementation (images taken from the test suite):
 <details>
