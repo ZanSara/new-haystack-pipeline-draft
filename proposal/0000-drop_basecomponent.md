@@ -258,6 +258,12 @@ The `__init__` method is optional and can take an arbitrary number of parameters
 
 The `validate()` method is also optional. Must be `@staticmethod` to allow validation to be performed on cold pipelines.
 
+** Bonus: Why run() and not __call__()? **
+
+Internally, the decorator maps `run()` to `__call__()` to simplify the job of `Pipeline.run()`. However, the simplified contract wraps the `run()` method heavily, destroying its original signature. To keep the original `run()` method usable outside of `Pipeline`s, the decorator assigns the wrapped version to __call__() to leave `run()` untouched. See the (arguably very scary) implementation of `@haystack_simple_node` if you want a headache or just love second order functions over classes.
+
+TODO: implement it better.
+
 
 ### Simplified Actions
 
