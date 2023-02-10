@@ -1,5 +1,5 @@
 - Title: Drop `BaseComponent` and reimplement `Pipeline`.
-- Decision driver: ZanSara
+- Decision driver: @ZanSara
 - Start Date: (today's date, in format YYYY-MM-DD)
 - Proposal PR: (fill in after opening the PR)
 - Github Issue or Discussion: (only if available, link the original request for this change)
