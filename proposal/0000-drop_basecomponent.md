@@ -126,7 +126,7 @@ This section focuses on the concept rather than the implementation strategy. For
 
 ## The Pipeline API
 
-These are the core features drove the design of the revised Pipeline API:
+These are the core features that drove the design of the revised Pipeline API:
 - An execution graph that is more flexible than a DAG.
 - A clear place for `DocumentStore`s
 - Shallow/lazy loading of heavy nodes to enable easy validation
