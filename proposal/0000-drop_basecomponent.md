@@ -328,6 +328,7 @@ They also have `warm_up` and `cool_down` methods, which simply mirror the pipeli
 
 - YAML representation
 - Name for the group of Pipeline
+- Which "simplified contracts" we want to implement
 
 # Drawbacks
 
@@ -341,7 +342,7 @@ There are a number of drawbacks about the proposed approach:
 
 # Adoption strategy
 
-Old and new Pipeline and actions are going to be, in most cases, fully incompatible.
+Old and new Pipeline, Nodes and actions are going to be, in most cases, fully incompatible.
 
 We must provide a migration script that can convert their existing pipeline YAMLs into the new ones.
 

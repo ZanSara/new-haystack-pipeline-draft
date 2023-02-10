@@ -232,12 +232,6 @@ class Pipeline:
             raise ValueError(f"Node named {name} not found.")
         return self.graph.nodes[candidates[0]]
 
-    # TODO later
-    def connect_pipeline(self, pipeline, input_edge, output_edge):
-        # Watch out, Pipelines might have N input actions and M output actions.
-        # One might need to specify to-from which edge to concatenate
-        pass
-
     def draw(self, path: Optional[Path] = None, graphviz: bool = True) -> None:
         """
         Draws the pipeline. If path is not given, shows an interactive plot
@@ -264,7 +258,7 @@ class Pipeline:
                 from netgraph import InteractiveGraph
             except (ImportError, ModuleNotFoundError) as e:
                 raise PipelineError("Failed to import some of the drawing libraries! Can't draw this pipeline.") from e
-                
+
             plot_instance = InteractiveGraph(
                 self.graph, 
                 node_size=2, 
