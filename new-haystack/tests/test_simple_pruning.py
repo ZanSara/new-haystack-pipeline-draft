@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 
-@haystack_action
+@haystack_node
 def even_number_classifier(
     name: str,
     data: Dict[str, Any],

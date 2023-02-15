@@ -5,5 +5,5 @@ from new_haystack.pipeline._utils import (
     PipelineSerializationError,
     PipelineValidationError,
     PipelineRuntimeError,
-    validate,
+    validate_graph,
 )

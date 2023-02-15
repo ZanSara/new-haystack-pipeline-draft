@@ -4,7 +4,7 @@ import logging
 
 from tqdm import tqdm
 
-from new_haystack.actions import haystack_action, ActionError
+from new_haystack.actions import haystack_node, ActionError
 from new_haystack.data import Data
 
 
@@ -30,7 +30,7 @@ class EmbedderError(ActionError):
     pass
 
 
-@haystack_action
+@haystack_node
 class Embedder:
     """
     Adds embeddings to a list of Data objects.

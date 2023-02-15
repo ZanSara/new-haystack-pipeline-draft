@@ -12,7 +12,7 @@ from new_haystack.actions import *
 logging.basicConfig(level=logging.INFO)
 
 
-@haystack_action
+@haystack_node
 def rename_data(
     name: str,
     data: Dict[str, Any],
@@ -26,7 +26,7 @@ def rename_data(
     return {DEFAULT_EDGE_NAME: ({**data, new_name: value}, parameters)}
 
 
-@haystack_action
+@haystack_node
 def edge_number(
     name: str,
     data: Dict[str, Any],

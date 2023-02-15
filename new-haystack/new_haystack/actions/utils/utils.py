@@ -3,13 +3,13 @@ from typing import Dict, List, Any
 import logging
 
 from new_haystack.data import TextQuery
-from new_haystack.actions import haystack_action, ActionError
+from new_haystack.actions import haystack_node, ActionError
 
 
 logger = logging.getLogger(__name__)
 
 
-@haystack_action
+@haystack_node
 def strings_to_text_queries(
     name: str,
     data: Dict[str, Any],

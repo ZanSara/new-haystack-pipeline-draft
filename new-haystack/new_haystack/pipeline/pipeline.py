@@ -13,15 +13,14 @@ from networkx.drawing.nx_agraph import to_agraph
 from new_haystack.actions._utils import DEFAULT_EDGE_NAME
 from new_haystack.pipeline._utils import (
     PipelineRuntimeError,
+    PipelineConnectError,
     PipelineError,
     NoSuchStoreError,
     merge,
     find_actions,
-    validate as validate,
-    is_warm,
-    is_cold,
-    warm_up,
-    cool_down,
+    validate_graph as validate_graph,
+    load_nodes,
+    serialize,
 )
 
 
@@ -63,8 +62,10 @@ class Pipeline:
                 "Pipeline edge list:\n - %s",
                 "\n - ".join([str(edge) for edge in nx.to_edgelist(self.graph)]),
             )
+            load_nodes(self.graph, self.available_actions)
+
             if validation:
-                validate(self.graph, self.available_actions)
+                validate_graph(self.graph, self.available_actions)
             else:
                 logger.info("Skipping pipeline validation.")
 
@@ -86,35 +87,14 @@ class Pipeline:
         )
         self.available_actions = {**find_actions(self._search_actions_in), **self.extra_actions}
 
-    def validate(self):
-        """
-        Shorthand to call validate() on this pipeline.
-        """
-        validate(self.graph, self.available_actions)
-
-    def warm_up(self):
-        """
-        Shorthand to call warm_up() on this pipeline.
-        """
-        warm_up(self.graph, self.available_actions)
-
-    def cool_down(self):
-        """
-        Shorthand to call cool_down() on this pipeline.
-        """
-        cool_down(self.graph)
-
     def save(self, path: Path) -> None:
         """
         Saves a pipeline to YAML.
         """
         _graph = deepcopy(self.graph)
-        if is_cold(self.graph):
-            logger.debug("Pipeline is cold: no need to serialize actions.")
-        else:
-            cool_down(_graph)
-
+        serialize(_graph)
         with open(path, "w") as f:
+            # FIXME we should dump the actual serialized graph, not just its node link data
             yaml.dump(nx.node_link_data(_graph), f)
         logger.debug("Pipeline saved to %s.", path)
 
@@ -157,7 +137,7 @@ class Pipeline:
         logger.debug("Adding node %s (%s)", name, action)
         self.graph.add_node(name, action=action, parameters=parameters)
 
-    def connect(self, nodes: List[str], weights: Optional[List[int]] = None) -> None:
+    def connect(self, nodes: List[str]) -> None:
         """
         Connect nodes together. All nodes to connect must exist in the pipeline,
         while new edges are created on the fly.
@@ -166,61 +146,63 @@ class Pipeline:
         generates 3 edges across these nodes in the order they're given.
 
         If connecting to an node that has several output edges, specify its name with 'node_name.edge_name'.
-        If the node will return outputs that needs to be merged, you can speficy the priority of each edge
-        in case of conflicts by assigning a weight to each edge. Note that iterators (lists, dictionaries, etc...)
+        If the node will return outputs that needs to be merged. Note that iterators (lists, dictionaries, etc...)
         are merged instead of replaced, but in case of internal conflicts the same priority order applies.
         """
-        # Check weights
-        if not weights:
-            weights = [1] * len(nodes)
-        elif len(weights) != len(nodes) - 1:
-            raise ValueError(
-                "You must give as many weights as the edges to create, or no weights at all."
-            )
-
         # Connect in pairs
         for position in range(len(nodes) - 1):
-            input_node = nodes[position]
-            output_node = nodes[position + 1]
-            weight = weights[position]
+            input_node_name = nodes[position]
+            output_node_name = nodes[position + 1]
 
             # Find out if the edge is named
-            if "." in input_node:
-                input_node, edge_name = input_node.split(".", maxsplit=1)
+            if "." in input_node_name:
+                input_node_name, edge_name = input_node_name.split(".", maxsplit=1)
             else:
                 edge_name = DEFAULT_EDGE_NAME
 
             # Remove edge name from output_node
-            output_node = output_node.split(".", maxsplit=2)[0]
+            output_node_name = output_node_name.split(".", maxsplit=2)[0]
 
             # All nodes names must be in the pipeline already
-            if input_node not in self.graph.nodes:
-                raise ValueError(f"{input_node} is not present in the pipeline.")
-            if output_node not in self.graph.nodes:
-                raise ValueError(f"{output_node} is not present in the pipeline.")
+            if input_node_name not in self.graph.nodes:
+                raise PipelineConnectError(f"{input_node_name} is not present in the pipeline.")
+            if output_node_name not in self.graph.nodes:
+                raise PipelineConnectError(f"{output_node_name} is not present in the pipeline.")
 
             # Check if the edge already exists
             if any(
-                edge[1] == output_node
-                for edge in self.graph.edges.data(nbunch=input_node)
+                edge[1] == output_node_name
+                for edge in self.graph.edges.data(nbunch=input_node_name)
             ):
-                logger.debug(
+                logger.warning(
                     "An edge connecting node %s and node %s already exists: skipping.",
-                    input_node,
-                    output_node,
+                    input_node_name,
+                    output_node_name,
                 )
-
             else:
+                # Check if the edge is valid
+                input_node = self.graph.nodes[input_node_name]
+                output_node = self.graph.nodes[output_node_name]
+                if not (
+                    edge_name in input_node.produces_outputs.keys() and
+                    edge_name in output_node.expects_inputs.keys() and
+                    input_node.produces_outputs[edge_name] == output_node.expects_inputs[edge_name]
+                ):
+                    raise PipelineConnectError(
+                        f"Cannot connect {input_node_name} with {output_node_name}: their declared inputs "
+                        f"and outputs do not match. Input node ({input_node_name}) declared "
+                        f"{getattr(input_node, 'produces_outputs', None)} while output node "
+                        f"({output_node_name}) declared {getattr(input_node, 'expects_inputs', None)}"
+                    )
                 # Create the edge
                 logger.debug(
                     "Connecting node %s to node %s along edge %s (weight: %s)",
-                    input_node,
-                    output_node,
+                    input_node_name,
+                    output_node_name,
                     edge_name,
-                    weight,
                 )
                 self.graph.add_edge(
-                    input_node, output_node, label=edge_name, weight=weight
+                    input_node_name, output_node_name, label=edge_name
                 )
 
     def get_node(self, name: str) -> Dict[str, Any]:
@@ -307,9 +289,6 @@ class Pipeline:
         if not parameters:
             parameters = {}
 
-        # Make sure the pipeline is valid
-        self.validate()
-
         # Validate the parameters
         if any(node not in self.graph.nodes for node in parameters.keys()):
             logging.warning(
@@ -317,12 +296,14 @@ class Pipeline:
                 [node for node in parameters.keys() if node not in self.graph.nodes],
             )
 
-        # Warm up the pipeline if necessary
-        if not is_warm(self.graph):
-            logger.info(
-                "Pipeline hasn't been warmed up before calling run(): warming it up now. This operation can take some time."
-            )
-            warm_up(graph=self.graph, available_actions=self.available_actions)
+        # FIXME is it needed?
+        # # Warm up the pipeline if necessary
+        # if not is_warm(self.graph):
+        #     logger.info(
+        #         "Pipeline hasn't been warmed up before calling run(): warming it up now. This operation can take some time."
+        #     )
+        #     warm_up(graph=self.graph, available_actions=self.available_actions)
+
 
         #
         # NOTES on the Pipeline.run() algorithm
@@ -398,23 +379,12 @@ class Pipeline:
                 inputs_buffer[node_name] = node_inputs
                 continue
             
-            # We have all the input data we need to proceed.
-            # If there are multiple entries in the node_inputs buffer, let's merge them here.
-            # Note that entries are sorted by weight because `merge()` lets the first parameter's
-            # values dominate in case of conflict. See merge() docstrings for details.
-            input_data: Dict[str, Any] = {}
-            input_params: Dict[str, Any] = {}
-            node_inputs = sorted(node_inputs.values(), key=lambda x: x["weight"], reverse=True)
-            for node_input in node_inputs:
-                input_data = merge(input_data, node_input["data"])
-                input_params = merge(input_params, node_input["parameters"])
-
             # Check for default parameters and add them to the parameter's dictionary
             # Default parameters are the one passed with the `pipeline.add_node()` method
             # and have lower priority with respect to parameters passed through `pipeline.run()`.
             default_params = self.graph.nodes[node_name]["parameters"]
             if default_params:
-                input_params[node_name] = {
+                node_inputs["parameters"][node_name] = {
                     **default_params,
                     **parameters.get(node_name, {}),
                 }
@@ -422,8 +392,8 @@ class Pipeline:
             # List the output edges to pass to the action
             output_edges = {e[2]["label"] for e in self.graph.out_edges(node_name, data=True)} or {DEFAULT_EDGE_NAME}
 
-            # *** PRUNING ***
-            # If the input data is an empty dictionary, that means that the node has been pruned.
+            # *** SKIPPING ***
+            # If the input data is an empty dictionary, that means that the node must be skipped.
             # Note the difference: if there's no key for this node in the buffer, or not all the expected
             # input nodes are present in it, then the node needs to wait. Instead, if a key
             # is present for all expected input edges but all of them are empty, that means that some
@@ -431,45 +401,49 @@ class Pipeline:
             # this node should not run. It should be "skipped" without blocking any other node downstream that
             # might be waiting for their output.
             #
-            # The typical case of pruning is a classifier. In indexing, classifiers might send a specific file 
-            # to a specific converter and later, all converters would send the documents to a PreProcessor.
-            # We want all converters that did not receive documents to:
+            # The typical case of skipping downstream nodes is a classifier. In indexing, classifiers might 
+            # send a specific file to a specific converter and later, all converters would send the documents 
+            # to a PreProcessor. We want all converters that did not receive documents to:
+            #
             # - not run
             # - signal PreProcessor not to wait for them.
             #
-            # This is called pruning.
+            # This is called skipping.
             # 
-            # TL:DR; Pruned nodes should:
+            # TL:DR; Skipped nodes should:
             # - not run
-            # - prune all their outgoing edges by propagating the empty input data
+            # - skip all their outgoing edges by propagating the empty input data
+            #
             node_results: Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]]
-            if not input_data:
-                # Prune the node and all the downstream ones
+            if not node_inputs:
+                # Skip the node and all the downstream ones
                 node_results = {output_edge: ({}, {}) for output_edge in output_edges}
             else:
                 # Call the node
-                node_action = self.graph.nodes[node_name]["action"]
+                node_action = self.graph.nodes[node_name]["action"].run()
                 try:
                     logger.info("* Running %s", node_name)
-                    logger.debug("Data:\n%s\n\nParameters:\n%s\n", input_data, input_params)
+                    logger.debug("Inputs:\n%s\n", node_inputs)
                     node_results = node_action(
                         name=node_name,
-                        data=input_data,
-                        parameters=input_params,
+                        data=node_inputs["data"],
+                        parameters=node_inputs["data"],
                         outgoing_edges=output_edges,
                         stores=self.stores,
                     )
                 except Exception as e:
                     raise PipelineRuntimeError(
-                        f"{node_name} raised '{e.__class__.__name__}: {e}' \n\ndata={input_data}\n\nparameters={input_params}\n\n"
+                        f"{node_name} raised '{e.__class__.__name__}: {e}' \n\inputs={node_inputs['data']}\n\n"
                         "See the stacktrace above for more information."
                     ) from e
 
             if not self.graph.out_edges(node_name):
                 # If there are no output edges, the output of this node is the output of the pipeline
                 # Store it in pipeline_results
-                # NOTE: we're assuming nodes can't output mode than once! If the assumption doesn't hold
-                # anymore, fix this code by using merge()
+                #
+                # FIXME: we're assuming nodes can't produce output more than once! If the assumption doesn't hold
+                # anymore, fix this code by using merge() (for example, a member of a loop that outputs on two edges, 
+                # one in output and one along the loop?? Needs to be tested)
                 pipeline_results[node_name] = node_results[DEFAULT_EDGE_NAME][0]
             else:
                 # Find out where the output will go: which nodes and along which edges
@@ -481,25 +455,23 @@ class Pipeline:
                     source_edge = edge_data[2]['label']
                     target_node = edge_data[1]
 
-                    # Corner case: pruning by passing an empty dict doesn't play well in loops.
+                    # Corner case: skipping by passing an empty dict doesn't play well in loops.
                     # Such nodes must be removed from the input buffer completely.
                     if not source_edge in node_results.keys() and nx.has_path(self.graph, target_node, node_name):
                         continue
                     
-                    # In all other cases, either populate the buffer or prune the downstream node by adding an empty dict
+                    # In all other cases, either populate the buffer or skip the downstream node by adding an empty dict
                     if not target_node in inputs_buffer:
                         inputs_buffer[target_node] = {}
                     if source_edge in node_results.keys():
                         inputs_buffer[target_node][f"{source_node}.{source_edge}"] = {
                             "data": node_results[source_edge][0], 
                             "parameters": node_results[source_edge][1], 
-                            "weight": edge_data[2]['weight']
                         }
                     else:
                         inputs_buffer[target_node][f"{source_node}.{source_edge}"] = {
                             "data": {},
                             "parameters": {},
-                            "weight": 0
                         }
 
         logger.info("Pipeline executed successfully.")

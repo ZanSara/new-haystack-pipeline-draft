@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 
-@haystack_action
+@haystack_node
 def below_ten(
     name: str,
     data: Dict[str, Any],

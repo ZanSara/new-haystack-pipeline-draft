@@ -1,75 +1,110 @@
-from typing import Dict, Any, Set
-from functools import wraps
 import logging
-import inspect
 
-from new_haystack.actions._utils import (
-    DEFAULT_EDGE_NAME,
-    ActionError,
-    ActionValidationError,
-    relevant_arguments,
-)
+from new_haystack.actions._utils import ActionError
 
 
 logger = logging.getLogger(__name__)
 
 
-def haystack_action(callable):
+def haystack_node(callable):
     """
-    Bare minimum setup for Haystack actions. Any callable decorated with @haystack_action
-    can be picked up by `find_actions` and be used in a Pipeline, serialized, deserialized, etc.
+    Bare minimum setup for Haystack nodes. Any class decorated with @haystack_node
+    can be picked up by `discover_nodes` and be used in a Pipeline, serialized, deserialized, etc.
 
     Pipelines expects the following signature:
 
-        `def my_action(name: str, data: Dict[str, Any], parameters: Dict[str, Any], outgoing_edges: Set[str], stores: Dict[str, Any])`
-
-    If the callable is a class, the method used is `run`, which is expected to have the same signature
-    plus a `self` argument at the start.
-
+    ```
+        def run(
+            self,
+            name: str, 
+            data: Dict[str, Any], 
+            parameters: Dict[str, Any],
+            stores: Dict[str, Any]
+        ):
+    ```
+    
     Inputs have the following shape:
+    
     ```
         data = {
-            "documents": [Doc(), Doc()...],
-            "files": [path.txt, path2.txt, ...],
-            ...
+            "input_edge1:": {
+                "documents": [Doc(), Doc()...],
+                "files": [path.txt, path2.txt, ...],
+                "whatever": ...
+                ...
+            },
+            "input_edge2": { ... }
         }
 
         parameters = {
-            "node_1": {
-                "param_1": 1,
-                "param_2": 2,
+            "input_edge1": {
+                "node_1": {
+                    "param_1": 1,
+                    "param_2": 2,
+                }
+                "node_2": {
+                    "param_1": 1,
+                    "param_2": 3,
+                }
             }
-            "node_2": {
-                "param_1": 1,
-                "param_2": 3,
-            }
-            ...
-        }
-
-        outgoing_edges = {    # Note: it's a set!
-            "edge_1",
-            "another_edge",
-            ...
+            "input_edge2": { ... }
         }
 
         stores = {
             "my happy documents": <MemoryDocumentStore instance>,
-            "testest-labels": <ESLabelStore instance>,
-            "files": <S3FileStore instance>,
+            "test-labels": <ESLabelStore instance>,
+            "files-store": <S3FileStore instance>,
             ...
         }
     ```
 
     Pipelines expects the following output:
 
-        `{output_edge: (relevant_data, relevant_parameters) for output_edge in output_edges}`
+    ```
+        {
+            "output_edge_1": (relevant_data, all_parameters),
+            "output_edge_2": ...
+        }
+    ```
 
-    Actions can therefore remove data from the pipeline and add/remove/alter parameter for EVERY following
+    Nodes can remove data from the pipeline and add/remove/alter parameter for EVERY following
     node by properly tweaking this output. Failing to produce output on one edge means that whatever node
-    connects to it will receive no data and no parameters (and likely crash).
+    connects to it will receive no data and no parameters.
 
-    Note that classes should also provide a `validate()` method if they want the class to be validated
-    when warmed up.
+    Sending no data and no parameters to a node means that it will not run: see Pipeline for details.
+
+    Nodes must also provide a `validate()` method. Validation expects nodes to have the following instance attributes:
+
+    ```
+    self.expects_inputs = {
+        "my_input_edge1": {"documents"},
+        "my_input_edge2": {"query"},
+        ...
+    }
+    self.produces_outputs = {
+        "my_output_edge1": {"answers"},
+        ...
+    }
+    ```
+    ##############
+    # UNNECESSARY?
+    #
+    # The `validate()` instance method with the following signature:
+    
+    # ```
+    # def validate(
+    #     self,
+    #     receiving_input: Dict[str, Set[str]],
+    #     expected_output: Dict[str, Set[str]]
+    # ):
+    # ```
+
+    # This method should check whether the node is properly connected to nodes that produce the 
+    # output it expects, and that it's connected to enough downstream nodes that expect what 
+    # the node is outputting.
+    
+    # Remember to consider corner cases such as your node being at the start of the pipeline
+    # (no input edges) or at the end of the pipeline (no output edges).
     """
     logger.debug("Registering %s as a Haystack action", callable)
 
@@ -79,146 +114,16 @@ def haystack_action(callable):
     # but could be customized.
     callable.__haystack_action__ = callable.__name__
 
-    # Map run() to __call__() in classes
-    # This way, run() can be used outside of pipelines unchanged
-    # (Especially relevant for `haystack_simple_action`, used here too for consistency)
-    if inspect.isclass(callable):
-        if not hasattr(callable, "run"):
-            raise ActionError(
-                "Haystack class actions must have a run() method. See the docs for more information."
-            )
-        callable.__call__ = callable.run
-
-        # Check for validate()
-        if not hasattr(callable, "validate"):
-            raise ActionError(
-                "Haystack class actions must have a validate() method. See the docs for more information."
-            )
-
-    return callable
-
-
-# TODO split the three wrappers to they can be reused separately in @haystack_node classes
-def haystack_simple_action(callable):
-    """
-    Simplified API for Haystack actions. Any callable decorated with @haystack_simple_action
-    can be picked up by `find_actions` and be used in a Pipeline, serialized, deserialized, etc.
-
-    If the callable is a function, it can have any signature: the parameters are searched by name in
-    the `data` and `parameter` dictionaries flowing down along the pipeline.
-
-    if the callable is a class, the `run()` method is the one that the pipeline will invoke. It can have
-    any signature just as in the case of the function. Note that classes should also provide a `validate()`
-    method if they want the class to be validated when warmed up. However @haystack_simple_action already
-    provides a basic validation method that checks for the presence of all and only the required init
-    parameters in the `init_parameters` dictionary.
-
-    Classes can have state and additional methods. However, consider keeping your actions lean to prevent
-    issues with state serialization.
-
-    Actions created with this decorator can output on one edge only. For nodes that can output on
-    multiple edges, see @haystack_node.
-
-    Actions created with this decorator can't access the stores dictionary. For nodes that can access them,
-    see @haystack_node.
-    """
-    logger.debug("Registering %s as a Haystack simple action", callable)
-
-    if inspect.isclass(callable):
-        # class: we need to wrap run, assign the wrapped version to __call__, and pass self
-        if not hasattr(callable, "run"):
-            raise ActionError(
-                "Haystack class actions must have a run() method. See the docs for more information."
-            )
-        run_method = callable.run
-
-        @wraps(run_method)
-        def run_wrapper(
-            self,
-            name: str,
-            data: Dict[str, Any],
-            parameters: Dict[str, Any],
-            outgoing_edges: Set[str],
-            stores: Dict[str, Any],
-        ):
-            if outgoing_edges and any(
-                edge != DEFAULT_EDGE_NAME for edge in outgoing_edges
-            ):
-                raise ActionError(
-                    "'haystack_simple_action' can only output to one edge"
-                )
-            output = (
-                run_method(
-                    self, **relevant_arguments(run_method, name, data, parameters)
-                )
-                or {}
-            )
-            return {DEFAULT_EDGE_NAME: ({**data, **output}, parameters)}
-
-        # Default 'validate()' that just checks that all mandatory args are there and no unknown args are given
-        validate_method = (
-            callable.validate
-            if hasattr(callable, "validate")
-            else lambda cls, init_parameters: None
+    # Check for run()
+    if not hasattr(callable, "run"):
+        raise ActionError(
+            "Haystack actions must have a 'run()' method. See the docs for more information."
         )
 
-        @wraps(validate_method)
-        def validate_wrapper(init_parameters: Dict[str, Any]):
-            signature = inspect.signature(callable.__init__)
+    # Check for validate()
+    if not hasattr(callable, "validate"):
+        raise ActionError(
+            "Haystack nodes must have a 'validate()' method. See the docs for more information."
+        )
 
-            # Check that all parameters given are in the signature
-            # TODO check types too!
-            for param_name in init_parameters.keys():
-                if param_name not in signature.parameters.keys():
-                    raise ActionValidationError(
-                        f"{callable.__name__} does not expect a parameter called {param_name} in its init method."
-                    )
-
-            # Make sure all mandatory arguments are present
-            for name in signature.parameters:
-                if (
-                    name != "self"
-                    and signature.parameters[name].default == inspect.Parameter.empty
-                    and name not in init_parameters
-                ):
-                    raise ActionValidationError(
-                        f"{callable.__name__} requires a parameter called {name} in its init method."
-                    )
-
-            validate_method(init_parameters=init_parameters)
-
-        # We need to also wrap __init__ to collect the init parameters by default
-        init_method = callable.__init__
-
-        @wraps(init_method)
-        def init_wrapper(self, *args, **kwargs):
-            if args:
-                raise ActionError(
-                    "'haystack_simple_action' does not support unnamed init parameters. "
-                    "Pass all parameters as `MyAction(param_name=param_value)` instead of just `MyAction(param_value)`. "
-                )
-            self.init_parameters = kwargs
-            init_method(self, **kwargs)
-
-        callable.__call__ = run_wrapper
-        callable.__init__ = init_wrapper
-        callable.validate = validate_wrapper
-        callable.__haystack_action__ = callable.__name__
-        return callable
-
-    # function: regular decorator pattern
-    @wraps(callable)
-    def wrapper(
-        name: str,
-        data: Dict[str, Any],
-        parameters: Dict[str, Any],
-        outgoing_edges: Set[str],
-        stores: Dict[str, Any],
-    ):
-        if outgoing_edges and any(edge != DEFAULT_EDGE_NAME for edge in outgoing_edges):
-            raise ActionError("'haystack_simple_action' can only output to one edge")
-        output = callable(**relevant_arguments(callable, name, data, parameters)) or {}
-        return {DEFAULT_EDGE_NAME: ({**data, **output}, parameters)}
-
-    wrapper.__haystack_action__ = callable.__name__
-    return wrapper
+    return callable

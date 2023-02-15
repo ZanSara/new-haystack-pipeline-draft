@@ -2,14 +2,14 @@ from typing import Dict, List, Any
 
 import logging
 
-from new_haystack.actions import haystack_action, ActionError
+from new_haystack.actions import haystack_node, ActionError
 from new_haystack.data import TextDocument
 
 
 logger = logging.getLogger(__name__)
 
 
-@haystack_action
+@haystack_node
 def convert_txt_to_text_documents(
     name: str,
     data: Dict[str, Any],

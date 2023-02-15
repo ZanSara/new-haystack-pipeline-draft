@@ -2,7 +2,7 @@ from typing import Dict, List, Any
 
 import logging
 
-from new_haystack.actions import haystack_action, ActionError
+from new_haystack.actions import haystack_node, ActionError
 from new_haystack.data import TextDocument, Query
 
 
@@ -13,7 +13,7 @@ class RetrieverError(ActionError):
     pass
 
 
-@haystack_action
+@haystack_node
 def retrieve_by_embedding_similarity(
     name: str,
     data: Dict[str, Any],
