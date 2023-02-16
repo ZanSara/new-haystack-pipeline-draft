@@ -35,7 +35,7 @@ On top of these issues, there is the tangential issue of `DocumentStore`s and th
   - The relationship between `DocumentStore` and `Retriever` should be left as a topic for a separate proposal but kept in mind, because Retrievers currently act as the main interface for `DocumentStore`s into `Pipeline`s.
 
 This proposal tries to adress all the above point by taking a radical stance with:
-- A full reimplementation of the `Pipeline` class that does limit itself to DAGs, can run branches in parallel, can prune branches, and can process loops.
+- A full reimplementation of the `Pipeline` class that does not limit itself to DAGs, can run branches in parallel, can prune branches, and can process loops.
 - Dropping the concept of `BaseComponent` and introducing the concept of stateless `Action`s in its place.
 - Define a clear and flexible contract between `Pipeline` and the `Action`s, along with a simplified contract to ease the learning curve.
 - Define a clear place for `DocumentStore`s with respect to `Pipeline`s that doesn't forcefully involve `Retriever`s.
@@ -126,7 +126,7 @@ This section focuses on the concept rather than the implementation strategy. For
 
 ## The Pipeline API
 
-These are the core features drove the design of the revised Pipeline API:
+These are the core features that drove the design of the revised Pipeline API:
 - An execution graph that is more flexible than a DAG.
 - A clear place for `DocumentStore`s
 - Shallow/lazy loading of heavy nodes to enable easy validation
@@ -140,8 +140,8 @@ Therefore, the revised Pipeline object has the following API:
     - `add_node(name, action, parameters)`: adds a disconnected node to the graph.
         - Note here the distinction between a **node** (the graph entity) and an **action** (the function that processes the data).
         - `action` accepts callables, however: 
-            - Simple functions have to be decorated with either `@haystack_action` or `@haystack_simple_action` (to see why, check the implementation sample)
-            - Classes need also to be decorated with either of the above decorators and must have a `run()` method, to which all the same limitation as stateless actions apply depending on the decorator used. Optionally they can provide also a `validate()` method and define their own `__init__()`.
+            - Simple functions have to be decorated with either `@haystack_action` or `@haystack_simple_action` (see Action Contract below)
+            - Classes need also to be decorated with either of the above decorators and must have a `run()` method, to which all the same limitation as stateless actions apply depending on the decorator used. Optionally they can provide also a `validate()` method and define their own `__init__()` (see Action Contract below).
             See below for a more detailed discussion of the Actions' design.
     - `get_node(name)`: returns the node's information stored in the graph
     - `connect(nodes, weights)`: chains a series of nodes together, adding weights to the edges if given.
@@ -155,7 +155,7 @@ Therefore, the revised Pipeline object has the following API:
     - `cool_down()`: iterate over the nodes of the graph and replaces all actions, stateless or stateful, with their name in the known actions registry. A "cool" pipeline can't be run right away, but it's ready for serialization. Calling `run()` on a "cold" pipeline causes `warm_up()` to run first.
     - `__init__(path=None)`: if a path is given, loads the pipeline from the YAML found at that path. Note that at this stage Pipeline will collect actions from all imported modules (see the implementation - the search can be scoped down to selected modules) and **all actions are validated (see `validate()`) but not initialized**: therefore, `__init__` creates "cold" pipelines.
     - `save(path)`: serializes and saves the pipeline as a YAML at the given path. If the pipeline is not "cold", `cool_down()` is called first.
-    - `validate()`: iterate over the nodes of the graph to check whether `action` is present, as a string or as a callable, into the known actions registry. `validate()` works on "cold" pipelines.
+    - `validate()`: iterate over the nodes of the graph to check whether `action` is present, as a string or as a callable, into the known actions registry. `validate()` works on both "warm" pipelines, "cold" pipeines, and even pipelines in mixed states, without affecting it (so it doesn't need to call `warm_up()` or `cool_down()` to work).
 
 Example pipeline topologies supported by this new implementation (images taken from the test suite):
 <details>
@@ -258,7 +258,6 @@ The `__init__` method is optional and can take an arbitrary number of parameters
 
 The `validate()` method is also optional. Must be `@staticmethod` to allow validation to be performed on cold pipelines.
 
-
 ### Simplified Actions
 
 ```python
@@ -298,6 +297,13 @@ def action(value, threshold):
     return "below"
 ```
 and so on.
+
+** Bonus: Why `run()` and not `__call__()`? **
+
+Internally, both `@haystack_action` and `@haystack_simple_action` map `run()` to `__call__()` to simplify the job of `Pipeline.run()`. However, the simplified contract wraps the `run()` method heavily, destroying its original signature. To keep the original `run()` method usable outside of `Pipeline`s, the decorator assigns the wrapped version to `__call__()` to leave `run()` untouched. See the (arguably very scary) implementation of `@haystack_simple_node` if you want a headache or just love second-order functions wrapping multiple dunder class methods all at once.
+
+TODO: `@haystack_simple_action` works amazingly, but needs a better implementation.
+
 
 ### Actions discovery logic
 
