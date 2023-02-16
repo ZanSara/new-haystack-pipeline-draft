@@ -386,9 +386,15 @@ class Pipeline:
             # Let's verify that all inputs edges that we should be waiting for are in the graph. 
             # Note the exception: if the node has no input nodes, for sure it's ready to run.
             input_names_received = [i[0] for i in node_inputs["data"]]
-            if not self.graph.in_edges(node_name) or inputs_to_wait_for > input_names_received:
+            if self.graph.in_edges(node_name) and sorted(inputs_to_wait_for) != sorted(input_names_received):
                 # We are missing some inputs. Let's put this node back in the queue
                 # and go to the next node.
+                logger.debug(
+                    "Skipping '%s', some inputs are missing (inputs to wait for: %s, inputs_received: %s)", 
+                    node_name, 
+                    inputs_to_wait_for, 
+                    input_names_received
+                )
                 inputs_buffer[node_name] = node_inputs
                 continue
             
@@ -396,9 +402,9 @@ class Pipeline:
             # Default parameters are the one passed with the `pipeline.add_node()` method
             # and have lower priority with respect to parameters passed through `pipeline.run()`
             # Or the modifications made by other nodes along the pipeline.
-            if "parameters" in self.graph.nodes[node_name].keys():
+            if self.graph.nodes[node_name]["parameters"]:
                 node_inputs["parameters"][node_name] = {
-                    **self.graph.nodes[node_name]["parameters"],
+                    **(self.graph.nodes[node_name]["parameters"] or {}),
                     **parameters.get(node_name, {}),
                 }
             
@@ -408,13 +414,14 @@ class Pipeline:
             node_action = self.graph.nodes[node_name]["action"]
             try:
                 logger.info("* Running %s", node_name)
-                logger.debug("Inputs:\n%s\n", node_inputs)
+                logger.debug("   '%s' inputs: %s", node_name, node_inputs)
                 node_results = node_action.run(
                     name=node_name,
                     data=node_inputs["data"],
                     parameters=node_inputs["data"],
                     stores=self.stores,
                 )
+                logger.debug("   '%s' outputs: %s\n", node_name, node_results)
             except Exception as e:
                 raise PipelineRuntimeError(
                     f"{node_name} raised '{e.__class__.__name__}: {e}' \n\inputs={node_inputs['data']}\n\n"
@@ -427,6 +434,8 @@ class Pipeline:
                 # We use append() to account for the case in which a node outputs several times 
                 # (for example, it can happen if there's a loop upstream). The list gets unwrapped before
                 # returning it if there's only one output.
+                if not node_name in pipeline_results.keys():
+                    pipeline_results[node_name] = []
                 pipeline_results[node_name].append(node_results[0])
             else:
                 # Find out where the output will go: which nodes and along which edges
@@ -436,21 +445,23 @@ class Pipeline:
 
                     # Corner case: skipping by returining an empty dict doesn't play well in loops.
                     # Such nodes must be removed from the input buffer completely.
-                    if not source_edge in [i[0] for i in node_results[0]] and nx.has_path(self.graph, target_node, node_name):
+                    if not source_edge in node_results[0].keys() and nx.has_path(self.graph, target_node, node_name):
                         continue
                     
                     # In all other cases, populate the inputs buffer
                     if not target_node in inputs_buffer:
-                        inputs_buffer[target_node] = {}  # Create the buffer for the downstream node if it's not there yet
-                    if source_edge in [i[0] for i in node_results[0]]:
+                        inputs_buffer[target_node] = {"data": []}  # Create the buffer for the downstream node if it's not there yet
+                    if source_edge in node_results[0].keys():
                         inputs_buffer[target_node]["data"].append((source_edge, node_results[0][source_edge]))
                     if len(node_results) == 2:
                         inputs_buffer[target_node]["parameters"] = node_results[1]
 
         logger.info("Pipeline executed successfully.")
 
-        # Simplify output for single output pipelines
+        # Simplify output for single edge, single output pipelines
         if len(pipeline_results.keys()) == 1:
             pipeline_results = pipeline_results[list(pipeline_results.keys())[0]]
+            if len(pipeline_results) == 1:
+                pipeline_results = pipeline_results[0]
 
         return pipeline_results
