@@ -125,14 +125,14 @@ class Pipeline:
         """
         # Action names are unique
         if name in self.graph.nodes:
-            raise ValueError(f"Node named {name} already exists: choose another name.")
+            raise ValueError(f"Node named '{name}' already exists: choose another name.")
 
         # Params must be a dict
         if parameters and not isinstance(parameters, dict):
             raise ValueError("'parameters' must be a dictionary.")
 
         # Add action to the graph, disconnected
-        logger.debug("Adding node %s (%s)", name, action)
+        logger.debug("Adding node '%s' (%s)", name, action)
         self.graph.add_node(name, action=action, parameters=parameters)
 
     def connect(self, nodes: List[str]) -> None:
@@ -164,9 +164,9 @@ class Pipeline:
                 upstream_node = self.graph.nodes[upstream_node_name]["action"]
                 if len(upstream_node.expected_outputs) != 1:
                     raise PipelineConnectError(
-                        f"Please specify which output of node {upstream_node_name} node "
-                        f"{downstream_node_name} should connect to. Node {upstream_node_name} has the following "
-                        f"outputs: {', '.join(upstream_node.expected_outputs)}"
+                        f"Please specify which output of node '{upstream_node_name}' node "
+                        f"'{downstream_node_name}' should connect to. Node '{upstream_node_name}' has the following "
+                        f"outputs: {upstream_node.expected_outputs}"
                     )
                 edge_name = upstream_node.expected_outputs[0]
 
@@ -176,9 +176,9 @@ class Pipeline:
 
             # All nodes names must be in the pipeline already
             if upstream_node_name not in self.graph.nodes:
-                raise PipelineConnectError(f"{upstream_node_name} is not present in the pipeline.")
+                raise PipelineConnectError(f"'{upstream_node_name}' is not present in the pipeline.")
             if downstream_node_name not in self.graph.nodes:
-                raise PipelineConnectError(f"{downstream_node_name} is not present in the pipeline.")
+                raise PipelineConnectError(f"'{downstream_node_name}' is not present in the pipeline.")
 
             # Check if the edge with that name already exists between those two nodes
             if any(
@@ -186,7 +186,7 @@ class Pipeline:
                 for edge in self.graph.edges.data(nbunch=upstream_node_name)
             ):
                 logger.info(
-                    "An edge called %s connecting node %s and node %s already exists: skipping.",
+                    "An edge called '%s' connecting node '%s' and node '%s' already exists: skipping.",
                     edge_name,
                     upstream_node_name,
                     downstream_node_name,
@@ -208,11 +208,11 @@ class Pipeline:
             if edge_name not in free_downstream_inputs or edge_name not in free_upstream_outputs:
                 expected_inputs_string = "\n".join(
                     [" - " + edge[2]["label"] + f" (taken by {edge[0]})" for edge in self.graph.in_edges(downstream_node_name, data=True)] + \
-                    [f" - {free_edge} (free)" for free_edge in free_upstream_outputs] 
+                    [f" - {free_in_edge} (free)" for free_in_edge in free_downstream_inputs]
                 )
                 expected_outputs_string = "\n".join(
                     [" - " + edge[2]["label"] + f" (taken by {edge[1]})" for edge in self.graph.out_edges(upstream_node_name, data=True)] + \
-                    [f" - {free_edge} (free)" for free_edge in free_downstream_inputs]
+                    [f" - {free_out_edge} (free)" for free_out_edge in free_upstream_outputs] 
                 )
                 raise PipelineConnectError(
                     f"Cannot connect '{upstream_node_name}' with '{downstream_node_name}' with an edge named '{edge_name}': "
@@ -222,7 +222,7 @@ class Pipeline:
                 )
             # Create the edge
             logger.debug(
-                "Connecting node %s to node %s along edge %s",
+                "Connecting node '%s' to node '%s' along edge '%s'",
                 upstream_node_name,
                 downstream_node_name,
                 edge_name,
@@ -418,13 +418,13 @@ class Pipeline:
                 node_results = node_action.run(
                     name=node_name,
                     data=node_inputs["data"],
-                    parameters=node_inputs["data"],
+                    parameters=node_inputs["parameters"],
                     stores=self.stores,
                 )
                 logger.debug("   '%s' outputs: %s\n", node_name, node_results)
             except Exception as e:
                 raise PipelineRuntimeError(
-                    f"{node_name} raised '{e.__class__.__name__}: {e}' \n\inputs={node_inputs['data']}\n\n"
+                    f"{node_name} raised '{e.__class__.__name__}: {e}' \ninputs={node_inputs['data']}\nparameters={node_inputs.get('parameters', None)}\n\n"
                     "See the stacktrace above for more information."
                 ) from e
 
@@ -453,8 +453,7 @@ class Pipeline:
                         inputs_buffer[target_node] = {"data": []}  # Create the buffer for the downstream node if it's not there yet
                     if source_edge in node_results[0].keys():
                         inputs_buffer[target_node]["data"].append((source_edge, node_results[0][source_edge]))
-                    if len(node_results) == 2:
-                        inputs_buffer[target_node]["parameters"] = node_results[1]
+                    inputs_buffer[target_node]["parameters"] = node_results[1] if len(node_results) == 2 else node_inputs["parameters"]
 
         logger.info("Pipeline executed successfully.")
 
