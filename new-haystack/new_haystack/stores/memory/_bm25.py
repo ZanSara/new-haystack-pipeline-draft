@@ -11,7 +11,7 @@ try:
     import rank_bm25
 except ImportError as e:
     logger.debug(
-        "rank_bm25 not found: MemoryDocumentStore won't be able to build BM25 indexes."
+        "rank_bm25 not found: MemoryDocumentStore won't be able to build BM25 pools."
     )
 
 
@@ -65,7 +65,7 @@ class BM25Representation:
         ):
             if doc.content_type != "text":
                 logger.warning(
-                    "Document %s is non-textual. It won't be present in the BM25 index.",
+                    "Document %s is non-textual. It won't be present in the BM25 pool.",
                     doc.id,
                 )
             else:

@@ -5,10 +5,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
-DEFAULT_EDGE_NAME = "all"
-
-
 class ActionError(Exception):
     pass
 

@@ -9,7 +9,7 @@ from new_haystack.data import TextDocument
 logger = logging.getLogger(__name__)
 
 
-@haystack_node
+#@haystack_node
 def convert_txt_to_text_documents(
     name: str,
     data: Dict[str, Any],

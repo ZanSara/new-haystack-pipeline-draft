@@ -1,98 +1,86 @@
-from typing import *
+from typing import Dict, Any, List, Tuple
+
 from pathlib import Path
 from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
 from new_haystack.actions import *
+from new_haystack.actions import haystack_node
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
-
-
-from typing import Dict, Any
-
-import logging
-
-from tqdm import tqdm
-
-from new_haystack.actions import haystack_node, DEFAULT_EDGE_NAME
-
-
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 
 @haystack_node
 class AddValue:
-    def __init__(self, add: int = 1):
+    def __init__(self, add: int = 1, input_name: str = "value", output_name: str = "value"):
         self.add = add
 
         # Contract
         self.init_parameters = {"add": add}
-        self.expects_inputs = {DEFAULT_EDGE_NAME: {"value"}}
-        self.produces_output = {DEFAULT_EDGE_NAME: {"value"}}
+        self.expected_inputs = [input_name]
+        self.expected_outputs = [output_name]
 
     def run(
         self,
         name: str,
-        data: Dict[str, Any],
+        data: List[Tuple[str, Any]],
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
-        value = data[DEFAULT_EDGE_NAME]["value"]
-        value += self.add
+        for _, value in data:
+            value += self.add
 
-        data["value"] = value
-        return {DEFAULT_EDGE_NAME: (data, parameters)}
+        return {"value": value}, parameters
 
 
 
 @haystack_node
 class Sum:
-    def __init__(self, expected_edges: List[str], expected_variable_name: str):
-        self.expected_variable_name = expected_variable_name
-        
+    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2):
         # Contract
-        self.init_parameters = {"expected_edges": expected_edges, "expected_variable_name": expected_variable_name}
-        self.expects_inputs = {expected_edge: {expected_variable_name} for expected_edge in expected_edges}
-        self.produces_output = {DEFAULT_EDGE_NAME: {"sum"}}
+        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name}
+        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
+        self.expected_outputs = ["sum"]
 
     def run(
         self,
         name: str,
-        data: Dict[str, Any],
+        data: List[Tuple[str, Any]],
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
         sum = 0
-        for edge in self.expects_inputs.keys():
-            value = data[edge][self.expected_variable_name]
+        for _, value in data:
             sum += value
 
-        data["sum"] = sum
-        return {DEFAULT_EDGE_NAME: (data, parameters)}
+        return {"sum", sum}, parameters
 
 
 
 def test_simple_pipeline(tmp_path):
 
     add_two = AddValue(add=2)
-    summer = Sum(expected_edges={"value_1", "value_2"}, expected_variable_name="value")
+    make_the_sum = Sum(expected_inputs_count=2, expected_inputs_name="value")
 
-    pipeline = Pipeline()
+    pipeline = Pipeline(search_actions_in=[__name__])
     pipeline.add_node("first_addition", add_two)
     pipeline.add_node("second_addition", add_two)
     pipeline.add_node("third_addition", add_two)
-    pipeline.add_node("sum", summer)
-    pipeline.connect(["add_one_1", "add_one_2.value_1", "sum"])
-    pipeline.connect(["add_one_3.value_2", "sum"])
+    pipeline.add_node("sum", make_the_sum)
+    pipeline.add_node("fourth_addition", AddValue(add=1, input_name="sum"))
+    pipeline.connect(["first_addition", "second_addition", "sum"])
+
+    # pipeline.connect(["first_addition.edge", "sum"])  # This fails: sum has a free slot, but expects an edge called 'value'
+
+    pipeline.connect(["third_addition", "sum", "fourth_addition"])
+
+    # pipeline.connect(["first_addition", "sum"])  # This fails: sum expects exactly two inputs
 
     pipeline.draw(tmp_path / "simple_pipeline.png")
 
-    results = pipeline.run(
-        {"value": 1},
-        parameters={},
-    )
+    results = pipeline.run({"value": 1})
     pprint(results)
 
 

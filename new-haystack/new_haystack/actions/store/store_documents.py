@@ -8,7 +8,7 @@ from new_haystack.actions import haystack_node, ActionError
 logger = logging.getLogger(__name__)
 
 
-@haystack_node
+#@haystack_node
 def store_documents(
     name: str,
     data: Dict[str, Any],

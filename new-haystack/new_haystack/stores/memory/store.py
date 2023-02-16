@@ -4,9 +4,9 @@ import logging
 
 from new_haystack.stores._utils import (
     DuplicateError,
-    IndexFullError,
+    PoolFullError,
     MissingItemError,
-    MissingIndexError,
+    MissingPoolError,
 )
 
 
@@ -21,126 +21,126 @@ class MemoryStore:
 
     def __init__(
         self,
-        index: str,
+        pool: str,
     ):
-        self.indexes: Dict[str, Dict[str, Any]] = {index: {}}
+        self.pools: Dict[str, Dict[str, Any]] = {pool: {}}
 
-    def create_index(self, index: str, use_bm25: Optional[bool] = None) -> None:
+    def create_pool(self, pool: str, use_bm25: Optional[bool] = None) -> None:
         """
-        Creates a new index with the given name.
+        Creates a new pool with the given name.
 
-        :param index: the index name
+        :param pool: the pool name
         """
-        self.indexes[index] = {}
+        self.pools[pool] = {}
 
-    def list_indexes(self) -> List[str]:
+    def list_pools(self) -> List[str]:
         """
-        Returns a list of all the indexes present in this store.
+        Returns a list of all the pools present in this store.
         """
-        return list(self.indexes.keys())
+        return list(self.pools.keys())
 
-    def delete_index(self, index: str, delete_populated_index: bool = False) -> None:
+    def delete_pool(self, pool: str, delete_populated_pool: bool = False) -> None:
         """
-        Drops an index completely. Will not delete index that contains items unless
-        `delete_populated_index=True` (default is False).
+        Drops an pool completely. Will not delete pool that contains items unless
+        `delete_populated_pool=True` (default is False).
 
-        :param index: the index to drop
-        :param delete_populated_index: whether to drop full indexes too
-        :raises IndexFullError if the index is full and delete_populated_index=False
+        :param pool: the pool to drop
+        :param delete_populated_pool: whether to drop full pools too
+        :raises IndexFullError if the pool is full and delete_populated_pool=False
         """
-        items_count = self.count_items(filters={}, index=index)
+        items_count = self.count_items(filters={}, pool=pool)
         if items_count > 0:
-            if not delete_populated_index:
-                raise IndexFullError(
-                    f"You tried to delete index '{index}' which contains {items_count} entries. "
-                    "Use `delete_populated_index=True` if you're sure."
+            if not delete_populated_pool:
+                raise PoolFullError(
+                    f"You tried to delete pool '{pool}' which contains {items_count} entries. "
+                    "Use `delete_populated_pool=True` if you're sure."
                 )
             logger.warning(
-                f"You are deleting index '{index}' which contains {items_count} items."
+                f"You are deleting pool '{pool}' which contains {items_count} items."
             )
-        del self.indexes[index]
+        del self.pools[pool]
 
-    def has_item(self, id: str, index: str) -> bool:
+    def has_item(self, id: str, pool: str) -> bool:
         """
         Checks if this ID exists in the store.
 
         :param id: the id to find in the store.
-        :param index: in which index to look for this item.
+        :param pool: in which pool to look for this item.
         """
         try:
-            return id in self.indexes[index].keys()
+            return id in self.pools[pool].keys()
         except IndexError as e:
-            raise MissingIndexError(
-                f"No index names {index}. Create it with .create_index()"
+            raise MissingPoolError(
+                f"No pool names {pool}. Create it with .create_pool()"
             ) from e
 
-    def get_item(self, id: str, index: str) -> Dict[str, Any]:
+    def get_item(self, id: str, pool: str) -> Dict[str, Any]:
         """
         Finds a item by ID in the store. Fails if the item is not present.
 
         Not to be used for retrieval or filtering.
 
         :param id: the id of the item to get.
-        :param index: in which index to look for this item.
+        :param pool: in which pool to look for this item.
         """
         try:
-            if not self.has_item(id=id, index=index):
-                raise MissingItemError(f"ID {id} not found in index {index}.")
-            return self.indexes[index][id]
+            if not self.has_item(id=id, pool=pool):
+                raise MissingItemError(f"ID {id} not found in pool {pool}.")
+            return self.pools[pool][id]
         except IndexError as e:
-            raise MissingIndexError(
-                f"No index names {index}. Create it with .create_index()"
+            raise MissingPoolError(
+                f"No pool names {pool}. Create it with .create_pool()"
             ) from e
 
-    def count_items(self, filters: Dict[str, Any], index: str) -> int:
+    def count_items(self, filters: Dict[str, Any], pool: str) -> int:
         """
         Returns the number of how many items match the given filters.
-        Pass filters={} to count all items in the given index.
+        Pass filters={} to count all items in the given pool.
 
         :param filters: the filters to apply to the items list.
-        :param index: in which index to look for this item.
+        :param pool: in which pool to look for this item.
         """
-        return len(self.indexes[index].keys())
+        return len(self.pools[pool].keys())
 
-    def get_ids(self, filters: Dict[str, Any], index: str) -> Iterable[str]:
+    def get_ids(self, filters: Dict[str, Any], pool: str) -> Iterable[str]:
         """
         Returns only the IDs of the items that match the filters provided.
 
         :param filters: the filters to apply to the item list.
-        :param index: in which index to look for this item.
+        :param pool: in which pool to look for this item.
         """
         try:
             # TODO apply filters
-            for id in self.indexes[index].keys():
+            for id in self.pools[pool].keys():
                 yield id
         except IndexError as e:
-            raise MissingIndexError(
-                f"No index names {index}. Create it with .create_index()"
+            raise MissingPoolError(
+                f"No pool names {pool}. Create it with .create_pool()"
             ) from e
 
     def get_items(
-        self, filters: Dict[str, Any], index: str
+        self, filters: Dict[str, Any], pool: str
     ) -> Iterable[Dict[str, Any]]:
         """
         Returns the items that match the filters provided.
 
         :param filters: the filters to apply to the item list.
-        :param index: in which index to look for this item.
+        :param pool: in which pool to look for this item.
         """
-        for id in self.get_ids(filters=filters, index=index):
-            yield self.indexes[index][id]
+        for id in self.get_ids(filters=filters, pool=pool):
+            yield self.pools[pool][id]
 
     def write_items(
         self,
         items: Iterable[Dict[str, Any]],
-        index: str,
+        pool: str,
         duplicates: Literal["skip", "overwrite", "fail"],
     ) -> None:
         """
         Writes items into the store.
 
         :param items: a list of dictionaries.
-        :param index: the index to write items into
+        :param pool: the pool to write items into
         :param duplicates: items with the same ID count as duplicates. When duplicates are met,
             Haystack can choose to:
              - skip: keep the existing item and ignore the new one.
@@ -150,37 +150,37 @@ class MemoryStore:
         :return: None
         """
         for item in items:
-            if self.has_item(item["id"], index=index):
+            if self.has_item(item["id"], pool=pool):
                 if duplicates == "fail":
                     raise DuplicateError(
-                        f"ID {item['id']} already exists in index '{index}'."
+                        f"ID {item['id']} already exists in pool '{pool}'."
                     )
                 elif duplicates == "skip":
                     logger.warning(
-                        "ID '%s' already exists in index '%s'", item["id"], index
+                        "ID '%s' already exists in pool '%s'", item["id"], pool
                     )
-            self.indexes[index][item["id"]] = item
+            self.pools[pool][item["id"]] = item
 
     def delete_items(
-        self, ids: List[str], index: str, fail_on_missing_item: bool = False
+        self, ids: List[str], pool: str, fail_on_missing_item: bool = False
     ) -> None:
         """
-        Deletes all ids from the given index.
+        Deletes all ids from the given pool.
 
         :param ids: the ids to delete
-        :param index: the index where these id should be stored
+        :param pool: the pool where these id should be stored
         :param fail_on_missing_item: fail if the id is not found, log ignore otherwise
         """
         for id in ids:
-            if not self.has_item(id=id, index=index):
+            if not self.has_item(id=id, pool=pool):
                 if fail_on_missing_item:
                     raise MissingItemError(
-                        f"ID {id} not found in index {index}, cannot delete it."
+                        f"ID {id} not found in pool {pool}, cannot delete it."
                     )
-                logger.info(f"ID {id} not found in index {index}, cannot delete it.")
+                logger.info(f"ID {id} not found in pool {pool}, cannot delete it.")
             try:
-                del self.indexes[index][id]
+                del self.pools[pool][id]
             except IndexError as e:
-                raise MissingIndexError(
-                    f"No index names {index}. Create it with .create_index()"
+                raise MissingPoolError(
+                    f"No pool names {pool}. Create it with .create_pool()"
                 ) from e

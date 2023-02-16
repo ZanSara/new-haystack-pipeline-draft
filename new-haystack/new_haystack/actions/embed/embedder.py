@@ -30,7 +30,7 @@ class EmbedderError(ActionError):
     pass
 
 
-@haystack_node
+#@haystack_node
 class Embedder:
     """
     Adds embeddings to a list of Data objects.

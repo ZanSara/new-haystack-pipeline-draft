@@ -13,7 +13,7 @@ class RetrieverError(ActionError):
     pass
 
 
-@haystack_node
+#@haystack_node
 def retrieve_by_embedding_similarity(
     name: str,
     data: Dict[str, Any],

@@ -4,7 +4,6 @@ from new_haystack.actions.action import (
 from new_haystack.actions._utils import (
     ActionError,
     ActionValidationError,
-    DEFAULT_EDGE_NAME,
 )
 from new_haystack.actions.convert_files import (
     convert_txt_to_text_documents

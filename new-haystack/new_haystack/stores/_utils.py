@@ -6,7 +6,7 @@ class DuplicateError(StoreError):
     pass
 
 
-class MissingIndexError(StoreError):
+class MissingPoolError(StoreError):
     pass
 
 
@@ -18,5 +18,5 @@ class MissingEmbeddingError(StoreError):
     pass
 
 
-class IndexFullError(StoreError):
+class PoolFullError(StoreError):
     pass

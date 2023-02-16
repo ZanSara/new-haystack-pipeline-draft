@@ -9,7 +9,7 @@ from new_haystack.actions import haystack_node, ActionError
 logger = logging.getLogger(__name__)
 
 
-@haystack_node
+#@haystack_node
 def strings_to_text_queries(
     name: str,
     data: Dict[str, Any],
