@@ -59,7 +59,7 @@ class Sum:
 
 
 
-def test_simple_pipeline(tmp_path):
+def test_pipeline(tmp_path):
 
     add_two = AddValue(add=2)
     make_the_sum = Sum(expected_inputs_count=2, expected_inputs_name="value")
@@ -78,12 +78,13 @@ def test_simple_pipeline(tmp_path):
 
     # pipeline.connect(["first_addition", "sum"])  # This fails: sum expects exactly two inputs
 
-    pipeline.draw(tmp_path / "simple_pipeline.png")
+    pipeline.draw(tmp_path / "merging_pipeline.png")
 
     results = pipeline.run({"value": 1})
     pprint(results)
 
+    assert results == {"value": 9}
 
 
 if __name__ == "__main__":
-    test_simple_pipeline(Path(__file__).parent)
+    test_pipeline(Path(__file__).parent)

@@ -15,10 +15,13 @@ from new_haystack.pipeline._utils import (
     PipelineConnectError,
     PipelineError,
     NoSuchStoreError,
+    PipelineMaxLoops,
     find_actions,
     validate_graph as validate_graph,
     load_nodes,
     serialize,
+    locate_pipeline_input_nodes,
+    locate_pipeline_output_nodes,
 )
 
 
@@ -33,6 +36,7 @@ class Pipeline:
     def __init__(
         self,
         path: Optional[Path] = None,
+        max_loops_allowed: int = 100,
         search_actions_in: Optional[List[str]] = None,
         extra_actions: Optional[Dict[str, Callable[..., Any]]] = None,
         validation: bool = True,
@@ -44,6 +48,7 @@ class Pipeline:
         set `search_actions_in=[<only the modules I want to look into for actions>]`.
         """
         self.stores: Dict[str, object] = {}
+        self.max_loops_allowed = max_loops_allowed
         self.extra_actions = extra_actions or {}
         self.available_actions = extra_actions or {}
         self.search_actions_in = search_actions_in
@@ -133,7 +138,7 @@ class Pipeline:
 
         # Add action to the graph, disconnected
         logger.debug("Adding node '%s' (%s)", name, action)
-        self.graph.add_node(name, action=action, parameters=parameters)
+        self.graph.add_node(name, action=action, visits=0, parameters=parameters)
 
     def connect(self, nodes: List[str]) -> None:
         """
@@ -240,58 +245,38 @@ class Pipeline:
             raise ValueError(f"Node named {name} not found.")
         return self.graph.nodes[candidates[0]]
 
-    def draw(self, path: Optional[Path] = None, graphviz: bool = True) -> None:
+    def draw(self, path: Path) -> None:
         """
-        Draws the pipeline. If path is not given, shows an interactive plot
-        in a matplotlib window.
+        Draws the pipeline.
         """
-
-        if graphviz:
-            try:
-                import pygraphviz
-            except ImportError:
-                raise ImportError(
-                    "Could not import `pygraphviz`. Please install via: \n"
-                    "pip install pygraphviz\n"
-                    "(You might need to run this first: apt install libgraphviz-dev graphviz )"
-                )
-            graphviz = to_agraph(self.graph)
-            graphviz.layout("dot")
-            graphviz.draw(path)
-            logger.debug(f"Pipeline diagram saved at {path}")
-
-        else:
-            try:
-                import matplotlib.pyplot as plt
-                from netgraph import InteractiveGraph
-            except (ImportError, ModuleNotFoundError) as e:
-                raise PipelineError("Failed to import some of the drawing libraries! Can't draw this pipeline.") from e
-
-            plot_instance = InteractiveGraph(
-                self.graph, 
-                node_size=2, 
-                node_layout="dot",
-                node_color="#ffffff00",
-                node_edge_color="#ffffff00",
-                node_labels=True, 
-                node_label_offset=0.0001,
-                node_label_fontdict={"backgroundcolor": "lightgrey"},
-                node_shape="o",
-                edge_width=1.,
-                edge_layout="curved",
-                edge_label_rotate=False,
-                edge_labels={(e[0], e[1]): e[2]["label"] for e in self.graph.edges(data=True)},            
-                edge_label_fontdict={"fontstyle": "italic", "color": "grey", "backgroundcolor": "#ffffff00"},
-                arrows=True, 
-                ax=None,
-                #scale=(10, 10)
+        try:
+            import pygraphviz
+        except ImportError:
+            raise ImportError(
+                "Could not import `pygraphviz`. Please install via: \n"
+                "pip install pygraphviz\n"
+                "(You might need to run this first: apt install libgraphviz-dev graphviz )"
             )
+        graph = deepcopy(self.graph)
 
-            if not path:
-                plt.show()
-            else:
-                plt.savefig(path, bbox_inches='tight')
-                logger.debug(f"Pipeline diagram saved at {path}")
+        # Draw the input
+        input_nodes = locate_pipeline_input_nodes(graph)
+        graph.add_node("input", shape="plain")
+        for node in input_nodes:
+            for edge in graph.nodes[node]["action"].expected_inputs:
+                graph.add_edge("input", node, label=edge)
+
+        # Draw the output
+        output_nodes = locate_pipeline_output_nodes(graph)
+        graph.add_node("output", shape="plain")
+        for node in output_nodes:
+            for edge in graph.nodes[node]["action"].expected_outputs:
+                graph.add_edge(node, "output", label=edge)
+
+        graphviz = to_agraph(graph)
+        graphviz.layout("dot")
+        graphviz.draw(path)
+        logger.debug(f"Pipeline diagram saved at {path}")
 
     def run(
         self,
@@ -350,8 +335,8 @@ class Pipeline:
         # Data access:
         # - Name of the node       # self.graph.nodes  (List[str])
         # - Action of the node     # self.graph.nodes[node]["action"]
-        # - Input nodes            # [e[0] for e in self.graph.in_edges(node, data=True)]
-        # - Output nodes           # [e[1] for e in self.graph.out_edges(node, data=True)]
+        # - Input nodes            # [e[0] for e in self.graph.in_edges(node)]
+        # - Output nodes           # [e[1] for e in self.graph.out_edges(node)]
         # - Output edges           # [e[2]["label"] for e in self.graph.out_edges(node, data=True)]
 
         logger.info("Pipeline execution started.")
@@ -359,44 +344,111 @@ class Pipeline:
 
         # Collect the nodes taking no input edges: these are the entry points.
         # They receive directly the pipeline inputs.
-        node_names: List[str] = [node for node in self.graph.nodes if not self.graph.in_edges(node)]
-        for node_name in node_names:
+        for node_name in locate_pipeline_input_nodes(self.graph):
             # NOTE: We allow users to pass dictionaries just for convenience.
             # The real input format is List[Tuple[str, Any]], to allow several input edges to have the same name.
             if isinstance(data, dict):
                 data = [(key, value) for key, value in data.items()]
             inputs_buffer[node_name] = {"data": data, "parameters": parameters}
 
-        # Execution loop. We select the nodes to run by checking which keys are set in the
+        # *** PIPELINE EXECUTION LOOP *** 
+        # We select the nodes to run by checking which keys are set in the
         # inputs buffer. If the key exists, the node might be ready to run.
         pipeline_results = {}
         while inputs_buffer:
+            logger.debug("> Current input buffer keys: %s", inputs_buffer.keys())
+
             node_name, node_inputs = inputs_buffer.popitem(last=False)  # FIFO
-                
-            # *** LOOPS DETECTION ***
+
+            # *** IS IT MY TURN? ***
+            # Let's verify that all inputs that the node needs are present in its buffer.
+
             # Let's first list all the inputs the current node should be waiting for. As said above,
             # we should be wait on all edges except for the downstream ones.
             inputs_to_wait_for = [
-                e[2]['label']  # the first element of the edge (input node) with its relative label
+                e[2]['label']  # the edge label
                 for e in self.graph.in_edges(node_name, data=True)  # for all input edges
-                # if there's no path in the graph leading back from the current node to the input one
+                # if there's no path in the graph leading back from the current node to the input node
                 if not nx.has_path(self.graph, node_name, e[0]) 
             ]
+            inputs_received = [i[0] for i in node_inputs["data"]]
 
-            # Let's verify that all inputs edges that we should be waiting for are in the graph. 
-            # Note the exception: if the node has no input nodes, for sure it's ready to run.
-            input_names_received = [i[0] for i in node_inputs["data"]]
-            if self.graph.in_edges(node_name) and sorted(inputs_to_wait_for) != sorted(input_names_received):
-                # We are missing some inputs. Let's put this node back in the queue
-                # and go to the next node.
-                logger.debug(
-                    "Skipping '%s', some inputs are missing (inputs to wait for: %s, inputs_received: %s)", 
-                    node_name, 
-                    inputs_to_wait_for, 
-                    input_names_received
-                )
-                inputs_buffer[node_name] = node_inputs
-                continue
+            # Note the exception: if the node has no input nodes, this check is automatically true.
+            if self.graph.in_edges(node_name) and sorted(inputs_to_wait_for) != sorted(inputs_received):
+
+                # We are missing some inputs. Did all the expected nodes upstream run?
+                nodes_to_wait_for = [
+                    e[0]  # the first element of the edge (input node)
+                    for e in self.graph.in_edges(node_name)  # for all input edges
+                    # if there's no path in the graph leading back from the current node to the input one
+                    if not nx.has_path(self.graph, node_name, e[0]) 
+                ]
+                if all(self.graph.nodes[node_name]["visits"] > 0 for node_name in nodes_to_wait_for):
+                    # All upstream nodes run, so:
+
+                    if not inputs_received:
+                        # All upstream nodes have been skipped. 
+                        # Let's skip this node and add all downstream nodes to the queue.
+                        logger.debug(
+                            "Skipping '%s', all input nodes were skipped (nodes to wait for: %s, input data: %s)", 
+                            node_name, 
+                            nodes_to_wait_for,
+                            node_inputs["data"]
+                        )
+                        self.graph.nodes[node_name]["visits"] += 1
+
+                        # All downstream nodes might be ready to run, so make sure they're all in the inputs buffer.
+                        downstream_nodes = [e[1] for e in self.graph.out_edges(node_name)]
+                        for downstream_node in downstream_nodes:
+                            if not downstream_node in inputs_buffer:
+                                inputs_buffer[downstream_node] = {"data": [], "parameters": parameters}
+                        continue
+                    
+                    else:
+                        # If all nodes upstream have run and **not all** of them have been skipped,
+                        # we're in the situation where a merge node is missing some of its input due to skips upstream, 
+                        # but is otherwise ready to run. Let's pass None on the missing edges and go ahead.
+                        #
+                        # Example:
+                        #
+                        # --------------- value ----+
+                        #                           |
+                        #        +---X--- even ---+ |
+                        #        |                | |
+                        # -- parity_check         sum --
+                        #        |                 |
+                        #        +------ odd ------+
+                        #
+                        # If 'parity_check' says produces output only on 'odd', 'sum' should run
+                        # with 'value' and 'odd' only, because 'even' will never arrive.
+                        #
+                        for input_expected in inputs_to_wait_for:
+                            if input_expected in inputs_received:
+                                inputs_to_wait_for.pop(inputs_to_wait_for.index(input_expected))
+                        logger.debug(
+                            "Some nodes upstream of '%s' were skipped, so some inputs will be None (missing inputs: %s)", 
+                            node_name, 
+                            inputs_to_wait_for
+                        )
+                        for missing_input in inputs_to_wait_for:
+                            node_inputs["data"].append((missing_input, None))
+                else:
+                    # Some node upstream didn't run yet, so we should wait for them.
+                    # Let's put this node back in the queue and go to the next node.
+                    logger.debug(
+                        "Putting '%s' back in the queue, some inputs are missing "
+                        "(inputs to wait for: %s, inputs_received: %s)", 
+                        node_name, 
+                        inputs_to_wait_for, 
+                        inputs_received
+                    )
+                    inputs_buffer[node_name] = node_inputs
+                    continue
+
+            # Raise the visits count for this node and check if we looped over it too many times
+            if self.graph.nodes[node_name]["visits"] > self.max_loops_allowed:
+                raise PipelineMaxLoops(f"Maximum loops count ({self.max_loops_allowed}) exceeded for node '{node_name}'.")
+            self.graph.nodes[node_name]["visits"] += 1
             
             # Check for default parameters and add them to the parameter's dictionary
             # Default parameters are the one passed with the `pipeline.add_node()` method
@@ -410,10 +462,12 @@ class Pipeline:
             
             node_results: Tuple[Dict[str, Any], Optional[Dict[str, Dict[str, Any]]]]
             
-            # Call the node
+            # Get the action
             node_action = self.graph.nodes[node_name]["action"]
+
+            # Call the node
             try:
-                logger.info("* Running %s", node_name)
+                logger.info("* Running %s (visits: %s)", node_name, self.graph.nodes[node_name]["visits"])
                 logger.debug("   '%s' inputs: %s", node_name, node_inputs)
                 node_results = node_action.run(
                     name=node_name,

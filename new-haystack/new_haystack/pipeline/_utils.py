@@ -1,6 +1,5 @@
-from typing import Dict, Any, Callable, List, Iterable, Union, Set
+from typing import Dict, Any, Callable, List, Union, Set
 
-from itertools import chain
 import sys
 import json
 import logging
@@ -39,6 +38,10 @@ class PipelineSerializationError(PipelineError):
 
 
 class PipelineDeserializationError(PipelineError):
+    pass
+
+
+class PipelineMaxLoops(PipelineError):
     pass
 
 
@@ -137,6 +140,20 @@ def validate_graph(
             )
 
     logger.debug("Pipeline is valid")
+
+
+def locate_pipeline_input_nodes(graph):
+    """
+    Collect the nodes with no input edges: they receive directly the pipeline inputs.
+    """
+    return [node for node in graph.nodes if not graph.in_edges(node)]
+
+
+def locate_pipeline_output_nodes(graph):
+    """
+    Collect the nodes with no output edges: these define the output of the pipeline.
+    """
+    return [node for node in graph.nodes if not graph.out_edges(node)]
 
 
 def load_nodes(

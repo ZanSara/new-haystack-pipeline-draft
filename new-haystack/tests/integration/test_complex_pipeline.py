@@ -58,9 +58,34 @@ class Sum:
     ):
         sum = 0
         for _, value in data:
-            sum += value
+            if value:
+                sum += value
 
         return ({"sum": sum}, )
+
+
+@haystack_node
+class Subtract:
+    """
+    Multi input, single output node
+    """
+    def __init__(self, first_value: str, second_value: str):
+        # Contract
+        self.init_parameters = {"first_value": first_value, "second_value": second_value}
+        self.expected_inputs = [first_value, second_value]
+        self.expected_outputs = ["diff"]
+
+    def run(
+        self,
+        name: str,
+        data: List[Tuple[str, Any]],
+        parameters: Dict[str, Any],
+        stores: Dict[str, Any],
+    ):
+        if len(data) != 2:
+            raise ValueError("Subtract takes exactly two values.")
+        diff = data[0][1] - data[1][1]
+        return ({"diff": diff}, )
 
 
 @haystack_node
@@ -109,8 +134,10 @@ class Enumerate:
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
-        divisor = parameters.get(name, {}).get("divisor", self.divisor)
-        output = {str(value): None for value in range(divisor)}
+        if len(data) != 1:
+            raise ValueError("Enumerate takes one single input.")
+
+        output = {str(value): data[0][1] for value in range(len(self.expected_outputs))}
         return (output, )
 
 
@@ -186,37 +213,6 @@ class Accumulate:
 
 
 @haystack_node
-class Merge:
-    """
-    Convert the list of tuples into a dict, makings lists for repeated keys.
-    """
-    def __init__(self, expected_inputs: List[str] = [], output_value: str = "merge"):
-        self.output_value = output_value
-        # Contract
-        self.init_parameters = {"expected_inputs": expected_inputs, "output_value": output_value}
-        self.expected_inputs = expected_inputs
-        self.expected_outputs = [output_value]
-
-    def run(
-        self,
-        name: str,
-        data: List[Tuple[str, Any]],
-        parameters: Dict[str, Any],
-        stores: Dict[str, Any],
-    ):
-        merged = {}
-        for key, value in data:
-            if key in merged.keys():
-                if isinstance(merged[key], list):
-                    merged[key].append(value)
-                else:
-                    merged[key] = [merged[key], value]
-            else:
-                merged[key] = value
-        return ({self.output_value: merged}, )
-
-
-@haystack_node
 class Replicate:
     """
     Replicates the input data on all given output edges
@@ -241,7 +237,7 @@ class Replicate:
 def test_complex_pipeline(tmp_path):
     accumulate = Accumulate(edge="value")
 
-    pipeline = Pipeline(search_actions_in=[__name__])
+    pipeline = Pipeline(search_actions_in=[__name__], max_loops_allowed=4)
     pipeline.add_node("greet_first", Greet(edge="value", message="Hello!"))    
     pipeline.add_node("accumulate_1", accumulate)
     pipeline.add_node("add_two", AddValue(add=2))
@@ -257,15 +253,16 @@ def test_complex_pipeline(tmp_path):
     pipeline.add_node("greet_again", Greet(edge="value", message="Hello again!"))    
     pipeline.add_node("sum", Sum(expected_inputs_name="value", expected_inputs_count=3))
 
-    pipeline.add_node("greet_enumerator", Greet(edge="any", message="Hello from enumerator!"))    
-    pipeline.add_node("enumerate", Enumerate(input_name="any", outputs_count=2))
+    pipeline.add_node("greet_enumerator", Greet(edge="value", message="Hello from enumerator!"))    
+    pipeline.add_node("enumerate", Enumerate(input_name="value", outputs_count=2))
     pipeline.add_node("add_three", AddValue(add=3))
 
-    pipeline.add_node("merge", Merge(expected_inputs=["sum", "value"]))
-    pipeline.add_node("greet_one_last_time", Greet(edge="merge", message="Bye bye!"))    
-    pipeline.add_node("replicate", Replicate(input_value="merge", expected_outputs=["first", "second"]))
+    pipeline.add_node("diff", Subtract(first_value="sum", second_value="value"))
+    pipeline.add_node("greet_one_last_time", Greet(edge="diff", message="Bye bye!"))    
+    pipeline.add_node("replicate", Replicate(input_value="diff", expected_outputs=["first", "second"]))
     pipeline.add_node("add_five", AddValue(add=5, input_name="first"))
     pipeline.add_node("add_four", AddValue(add=4, input_name="second"))
+    pipeline.add_node("accumulate_3", accumulate)
 
     pipeline.connect([
         "greet_first", 
@@ -275,21 +272,22 @@ def test_complex_pipeline(tmp_path):
         "rename_even_to_value", 
         "greet_again", 
         "sum", 
-        "merge", 
+        "diff", 
         "greet_one_last_time", 
         "replicate.first", 
         "add_five"
     ])
     pipeline.connect([
         "replicate.second", 
-        "add_four"
+        "add_four",
+        "accumulate_3"
     ])
     pipeline.connect([
         "parity_check.remainder_is_1", 
         "rename_odd_to_value", 
         "add_one", 
         "accumulate_2", 
-        "merge"
+        "diff"
     ])
     pipeline.connect([
         "greet_enumerator", 
@@ -308,6 +306,9 @@ def test_complex_pipeline(tmp_path):
     results = pipeline.run({"value": 1})
     pprint(results)
     print("accumulated: ", accumulate.sum)
+
+    assert results == {'add_five': [{'value': 6}], 'accumulate_3': [{'value': 5}]}
+    assert accumulate.sum == 10
 
 
 
