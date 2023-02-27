@@ -3,7 +3,7 @@ from typing import Dict, List, Any
 import logging
 
 from new_haystack.data import TextQuery
-from new_haystack.actions import haystack_node, ActionError
+from new_haystack.nodes import haystack_node, NodeError
 
 
 logger = logging.getLogger(__name__)

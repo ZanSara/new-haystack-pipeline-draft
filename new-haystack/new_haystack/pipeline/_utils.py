@@ -7,8 +7,6 @@ from inspect import getmembers, isclass, isfunction
 
 import networkx as nx
 
-from new_haystack.actions._utils import ActionValidationError
-
 
 logger = logging.getLogger(__name__)
 
@@ -45,66 +43,66 @@ class PipelineMaxLoops(PipelineError):
     pass
 
 
-def find_actions(modules_to_search: List[str]) -> Dict[str, Callable[..., Any]]:
+def find_nodes(modules_to_search: List[str]) -> Dict[str, Callable[..., Any]]:
     """
-    Finds all functions decorated with `haystack_action` or derivatives (like `haystack_simple_action`)
+    Finds all functions decorated with `haystack_node` or derivatives (like `haystack_simple_node`)
     in all the modules listed in `modules_to_search`.
 
     WARNING: will attempt to import any module listed for search.
 
-    Returns a dictionary with the action name and the action itself.
+    Returns a dictionary with the node name and the node itself.
     """
-    actions = {}
+    nodes = {}
     for search_module in modules_to_search:
-        logger.debug("Searching for Haystack actions under %s...", search_module)
+        logger.debug("Searching for Haystack nodes under %s...", search_module)
 
         duplicate_names = []
         for _, entity in getmembers(
             sys.modules[search_module], lambda x: isfunction(x) or isclass(x)
         ):
-            # It's a Haystack action
-            if hasattr(entity, "__haystack_action__"):
+            # It's a Haystack node
+            if hasattr(entity, "__haystack_node__"):
 
-                # Two actions were discovered with the same name - namespace them
-                if entity.__haystack_action__ in actions:
-                    other_entity = actions[entity.__haystack_action__]
+                # Two nodes were discovered with the same name - namespace them
+                if entity.__haystack_node__ in nodes:
+                    other_entity = nodes[entity.__haystack_node__]
                     other_source_module = other_entity.__module__
                     logger.info(
-                        "An action with the same name was found in two separate modules!\n"
-                        " - Action name: %s\n - Found in modules: '%s' and '%s'\n"
+                        "An node with the same name was found in two separate modules!\n"
+                        " - Node name: %s\n - Found in modules: '%s' and '%s'\n"
                         "They both are going to be loaded, but you will need to use a namespace "
                         "path (%s.%s and %s.%s respectively) to use them in your Pipeline YAML definitions.",
-                        entity.__haystack_action__,
+                        entity.__haystack_node__,
                         other_source_module,
                         search_module,
 
                         other_source_module,
-                        entity.__haystack_action__,
+                        entity.__haystack_node__,
                         search_module,
-                        entity.__haystack_action__,
+                        entity.__haystack_node__,
                     )
-                    duplicate_names.append(entity.__haystack_action__)
+                    duplicate_names.append(entity.__haystack_node__)
 
-                    # Add both actions as namespaced
-                    actions[f"{other_source_module}.{entity.__haystack_action__}"] = other_entity
-                    actions[f"{search_module}.{entity.__haystack_action__}"] = entity
+                    # Add both nodes as namespaced
+                    nodes[f"{other_source_module}.{entity.__haystack_node__}"] = other_entity
+                    nodes[f"{search_module}.{entity.__haystack_node__}"] = entity
                     # Do not remove the non-namespaced one, so in the case of a third collision it geta detected properly
 
-                actions[entity.__haystack_action__] = entity
-                logger.debug(" * Found action: %s", entity)
+                nodes[entity.__haystack_node__] = entity
+                logger.debug(" * Found node: %s", entity)
 
     # Now delete all remaining duplicates
     for duplicate in duplicate_names:
-        del actions[duplicate]
+        del nodes[duplicate]
 
-    return actions
+    return nodes
 
 
 #
 # FIXME REVIEW
 #
 def validate_graph(
-    graph: nx.DiGraph, available_actions: Dict[str, Dict[str, Union[str, Callable[..., Any]]]]
+    graph: nx.DiGraph, available_nodes: Dict[str, Dict[str, Union[str, Callable[..., Any]]]]
 ) -> None:
     """
     Makes sure the pipeline can run. Useful especially for pipelines loaded from file.
@@ -131,12 +129,12 @@ def validate_graph(
         )
 
     for node in graph.nodes:
-        action = graph.nodes[node]["action"]
+        node = graph.nodes[node]["node"]
 
-        # Check that all actions in the graph are actually registered actions
-        if not type(action) in available_actions.values():
+        # Check that all nodes in the graph are actually registered nodes
+        if not type(node) in available_nodes.values():
             raise PipelineValidationError(
-                f"Action {action} not found. Are you sure it is a Haystack action?"
+                f"Node {node} not found. Are you sure it is a Haystack node?"
             )
 
     logger.debug("Pipeline is valid")
@@ -157,34 +155,34 @@ def locate_pipeline_output_nodes(graph):
 
 
 def load_nodes(
-    graph: nx.DiGraph, available_actions: Dict[str, Dict[str,Callable[..., Any]]]
+    graph: nx.DiGraph, available_nodes: Dict[str, Dict[str,Callable[..., Any]]]
 ) -> None:
     """
     Prepares the pipeline for the first execution. Instantiates all
     class nodes present in the pipeline, if they're not instantiated yet.
     """
-    # Convert action names into actions and deserialize parameters
+    # Convert node names into nodes and deserialize parameters
     for name in graph.nodes:
         try:
-            if isinstance(graph.nodes[name]["action"], str):
-                graph.nodes[name]["action"] = available_actions[
-                    graph.nodes[name]["action"]
+            if isinstance(graph.nodes[name]["node"], str):
+                graph.nodes[name]["node"] = available_nodes[
+                    graph.nodes[name]["node"]
                 ]
                 # If it's a class, check if it's reusable or needs instantiation
-                if isclass(graph.nodes[name]["action"]):
+                if isclass(graph.nodes[name]["node"]):
                     if "instance_id" in graph.nodes[name].keys():
                         # Reusable: fish it out from the graph
-                        graph.nodes[name]["action"] = graph.nodes[
+                        graph.nodes[name]["node"] = graph.nodes[
                             graph.nodes[name]["instance_id"]
-                        ]["action"]
+                        ]["node"]
                     else:
                         # New: instantiate it
-                        graph.nodes[name]["action"] = graph.nodes[name]["action"](
+                        graph.nodes[name]["node"] = graph.nodes[name]["node"](
                             **graph.nodes[name]["init"] or {}
                         )
         except Exception as e:
             raise PipelineDeserializationError(
-                "Couldn't deserialize this action: " + name
+                "Couldn't deserialize this node: " + name
             ) from e
 
         try:
@@ -194,7 +192,7 @@ def load_nodes(
                 )
         except Exception as e:
             raise PipelineDeserializationError(
-                "Couldn't deserialize this action's parameters: " + name
+                "Couldn't deserialize this node's parameters: " + name
             ) from e
 
 
@@ -204,19 +202,19 @@ def serialize(graph: nx.DiGraph()) -> None:
     """
     reused_instances = {}
     for name in graph.nodes:
-        # If the action is a reused instance, let's add the instance ID to the meta
-        if graph.nodes[name]["action"] in reused_instances.values():
+        # If the node is a reused instance, let's add the instance ID to the meta
+        if graph.nodes[name]["node"] in reused_instances.values():
             graph.nodes[name]["instance_id"] = [
                 key
                 for key, value in reused_instances.items()
-                if value == graph.nodes[name]["action"]
+                if value == graph.nodes[name]["node"]
             ][0]
 
-        elif hasattr(graph.nodes[name]["action"], "init_parameters"):
+        elif hasattr(graph.nodes[name]["node"], "init_parameters"):
             # Class nodes need to have a self.init_parameters attribute (or property)
             # if they want their init params to be serialized.
             try:
-                graph.nodes[name]["init"] = graph.nodes[name]["action"].init_parameters
+                graph.nodes[name]["init"] = graph.nodes[name]["node"].init_parameters
             except Exception as e:
                 raise PipelineSerializationError(
                     f"A node failed to provide its init parameters: {name}\n"
@@ -225,16 +223,16 @@ def serialize(graph: nx.DiGraph()) -> None:
                     "step into your' '__init__' method."
                 ) from e
 
-            # This is a new action instance, so let's store it
-            reused_instances[name] = graph.nodes[name]["action"]
+            # This is a new node instance, so let's store it
+            reused_instances[name] = graph.nodes[name]["node"]
 
         # Serialize the callable by name
         try:
-            graph.nodes[name]["action"] = graph.nodes[name][
-                "action"
-            ].__haystack_action__
+            graph.nodes[name]["node"] = graph.nodes[name][
+                "node"
+            ].__haystack_node__
         except Exception as e:
-            raise PipelineSerializationError(f"Couldn't serialize this action: {name}")
+            raise PipelineSerializationError(f"Couldn't serialize this node: {name}")
 
         # Serialize its default parameters with JSON
         try:
@@ -244,5 +242,5 @@ def serialize(graph: nx.DiGraph()) -> None:
                 )
         except Exception as e:
             raise PipelineSerializationError(
-                f"Couldn't serialize this action's parameters: {name}"
+                f"Couldn't serialize this node's parameters: {name}"
             )

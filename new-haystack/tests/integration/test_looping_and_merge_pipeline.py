@@ -130,21 +130,44 @@ class Count:
         return ({data[0][0]: data[0][1]}, )
 
 
+@haystack_node
+class Sum:
+    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2):
+        # Contract
+        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name}
+        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
+        self.expected_outputs = ["sum"]
+
+    def run(
+        self,
+        name: str,
+        data: List[Tuple[str, Any]],
+        parameters: Dict[str, Any],
+        stores: Dict[str, Any],
+    ):
+        sum = 0
+        for _, value in data:
+            sum += value
+
+        return ({"sum": sum}, )
 
 
 def test_pipeline(tmp_path):
     pipeline = Pipeline(search_nodes_in=[__name__], max_loops_allowed=10)
     counter = Count(edge="value")
     pipeline.add_node("entry_point", NoOp(edges=["value"]))
+    pipeline.add_node("entry_point_2", NoOp(edges=["value"]))
     pipeline.add_node("merge", Merge())
     pipeline.add_node("below_10", Below(threshold=10))
     pipeline.add_node("add_one", AddValue(add=1, input_name="below"))
     pipeline.add_node("counter", counter)
     pipeline.add_node("add_two", AddValue(add=2, input_name="above"))
+    pipeline.add_node("sum", Sum(expected_inputs_count=2, expected_inputs_name="value"))
     pipeline.connect(["entry_point", "merge", "below_10.below", "add_one", "counter",  "merge"])
-    pipeline.connect(["below_10.above", "add_two"])
+    pipeline.connect(["below_10.above", "add_two", "sum"])
+    pipeline.connect(["entry_point_2", "sum"])
 
-    pipeline.draw(tmp_path / "looping_pipeline.png")
+    pipeline.draw(tmp_path / "looping_and_merge_pipeline.png")
 
     results = pipeline.run(
         {"value": 3},
@@ -152,7 +175,7 @@ def test_pipeline(tmp_path):
     pprint(results)
     print("counter: ", counter.count)
 
-    assert results == {"value": 12}
+    assert results == {"sum": 15}
     assert counter.count == 7
 
 

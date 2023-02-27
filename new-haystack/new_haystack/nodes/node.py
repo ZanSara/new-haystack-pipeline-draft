@@ -1,6 +1,6 @@
 import logging
 
-from new_haystack.actions._utils import ActionError
+from new_haystack.nodes._utils import NodeError
 
 
 logger = logging.getLogger(__name__)
@@ -26,12 +26,12 @@ def haystack_node(callable):
     Inputs have the following shape:
     
     ```
-        data = {
-            "documents": [Doc(), Doc()...],
-            "files": [path.txt, path2.txt, ...],
-            "whatever": ...
+        data = [
+            ("documents", [Doc(), Doc()...]),
+            ("files", [path.txt, path2.txt, ...]),
+            ("whatever", ...)
             ...
-        }
+        ]
 
         parameters = {
             "node_1": {
@@ -56,7 +56,7 @@ def haystack_node(callable):
     Pipelines expects the following output:
 
     ```
-        ({output_edge: value, ...}, all_parameters)
+        ({output_edge: value, ...}, <all_parameters or None>)
     ```
 
     Nodes can add/remove/alter parameter for EVERY following node.
@@ -64,7 +64,7 @@ def haystack_node(callable):
     no data and no parameters, and sending no data and no parameters to a node means that it will not run: 
     see Pipeline for details.
 
-    Pipeline.connect() performs some basic validation. It expects nodes to have the following instance attributes:
+    `Pipeline.connect()` performs some basic validation. It expects nodes to have the following instance attributes:
 
     ```
     self.expected_inputs = ["documents", "query", ...]
@@ -72,17 +72,17 @@ def haystack_node(callable):
     ```
 
     """
-    logger.debug("Registering %s as a Haystack action", callable)
+    logger.debug("Registering %s as a Haystack node", callable)
 
-    # __haystack_action__ is used to tell Haystack Actions from regular functions.
-    # Used by `find_actions`. Set to the desired action name: normally the function/class 
+    # __haystack_node__ is used to tell Haystack Nodes from regular functions.
+    # Used by `find_nodes`. Set to the desired node name: normally the function/class 
     # name, but could be customized.
-    callable.__haystack_action__ = callable.__name__
+    callable.__haystack_node__ = callable.__name__
 
     # Check for run()
     if not hasattr(callable, "run"):
-        raise ActionError(
-            "Haystack actions must have a 'run()' method. See the docs for more information."
+        raise NodeError(
+            "Haystack nodes must have a 'run()' method. See the docs for more information."
         )
 
     return callable

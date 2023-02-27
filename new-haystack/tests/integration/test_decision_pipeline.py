@@ -4,7 +4,7 @@ from pathlib import Path
 from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
-from new_haystack.actions import haystack_node
+from new_haystack.nodes import haystack_node
 
 import logging
 
@@ -89,7 +89,7 @@ class Remainder:
 
 def test_pipeline(tmp_path):
     
-    pipeline = Pipeline(search_actions_in=[__name__], max_loops_allowed=2)
+    pipeline = Pipeline(search_nodes_in=[__name__], max_loops_allowed=2)
 
     add_one = AddValue(add=1, input_name="value")
     pipeline.add_node("add_one", add_one)

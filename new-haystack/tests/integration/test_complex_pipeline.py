@@ -4,8 +4,8 @@ from pathlib import Path
 from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
-from new_haystack.actions import *
-from new_haystack.actions import haystack_node
+from new_haystack.nodes import *
+from new_haystack.nodes import haystack_node
 
 import logging
 
@@ -70,6 +70,8 @@ class Subtract:
     Multi input, single output node
     """
     def __init__(self, first_value: str, second_value: str):
+        self.first_value = first_value
+        self.second_value = second_value
         # Contract
         self.init_parameters = {"first_value": first_value, "second_value": second_value}
         self.expected_inputs = [first_value, second_value]
@@ -84,8 +86,11 @@ class Subtract:
     ):
         if len(data) != 2:
             raise ValueError("Subtract takes exactly two values.")
-        diff = data[0][1] - data[1][1]
-        return ({"diff": diff}, )
+        
+        first_value = [value for name, value in data if name == self.first_value][0]
+        second_value = [value for name, value in data if name == self.second_value][0]
+        
+        return ({"diff": first_value - second_value}, )
 
 
 @haystack_node
@@ -234,10 +239,88 @@ class Replicate:
         return ({output: data[0][1] for output in self.expected_outputs}, )
 
 
+@haystack_node
+class Below:
+    def __init__(self, threshold: int = 10, input_name: str = "value", output_above: str = "above", output_below: str = "below"):
+        self.threshold = threshold
+        self.output_above = output_above
+        self.output_below = output_below
+
+        # Contract
+        self.init_parameters = {"threshold": threshold, "input_name": input_name, "output_above": output_above, "output_below": output_below}
+        self.expected_inputs = [input_name]
+        self.expected_outputs = [output_above, output_below]
+
+    def run(
+        self,
+        name: str,
+        data: List[Tuple[str, Any]],
+        parameters: Dict[str, Any],
+        stores: Dict[str, Any],
+    ):
+        if len(data) != 1:
+            raise ValueError("Below takes one input value only")
+
+        if data[0][1] < self.threshold:
+            return {self.output_below: data[0][1]}, 
+        else:
+            return {self.output_above: data[0][1]}, 
+
+
+@haystack_node
+class Merge:
+    """
+    Returns one single output on the output edge, which corresponds to the value of the last input edge that is not None.
+    If no input edges received any value, returns None as well.
+    """
+    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2, output_name: str = "value"):
+        self.output_name = output_name
+        # Contract
+        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name, "output_name": output_name}
+        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
+        self.expected_outputs = [output_name]
+
+    def run(
+        self,
+        name: str,
+        data: List[Tuple[str, Any]],
+        parameters: Dict[str, Any],
+        stores: Dict[str, Any],
+    ):
+        output = None
+        for _, value in data:
+            if value is not None:
+                output = value
+
+        return ({self.output_name: output}, )
+
+
+@haystack_node
+class Double:
+    def __init__(self, input_name: str = "value", output_name: str = "value"):
+        # Contract
+        self.init_parameters = {"input_name": input_name, "output_name": output_name}
+        self.expected_inputs = [input_name]
+        self.expected_outputs = [output_name]
+
+    def run(
+        self,
+        name: str,
+        data: List[Tuple[str, Any]],
+        parameters: Dict[str, Any],
+        stores: Dict[str, Any],
+    ):
+        for _, value in data:
+            value *= 2
+
+        return ({self.expected_outputs[0]: value}, )
+
+
+
 def test_complex_pipeline(tmp_path):
     accumulate = Accumulate(edge="value")
 
-    pipeline = Pipeline(search_actions_in=[__name__], max_loops_allowed=4)
+    pipeline = Pipeline(search_nodes_in=[__name__], max_loops_allowed=4)
     pipeline.add_node("greet_first", Greet(edge="value", message="Hello!"))    
     pipeline.add_node("accumulate_1", accumulate)
     pipeline.add_node("add_two", AddValue(add=2))
@@ -249,6 +332,11 @@ def test_complex_pipeline(tmp_path):
     pipeline.add_node("rename_odd_to_value", Rename(input_name="remainder_is_1", output_name="value"))  
     pipeline.add_node("rename_0_to_value", Rename(input_name="0", output_name="value"))
     pipeline.add_node("rename_1_to_value", Rename(input_name="1", output_name="value"))
+    pipeline.add_node("rename_above_to_value", Rename(input_name="above", output_name="value"))    
+
+    pipeline.add_node("loop_merger", Merge(expected_inputs_name="value", expected_inputs_count=2))
+    pipeline.add_node("below_10", Below())
+    pipeline.add_node("double", Double(input_name="below", output_name="value"))
 
     pipeline.add_node("greet_again", Greet(edge="value", message="Hello again!"))    
     pipeline.add_node("sum", Sum(expected_inputs_name="value", expected_inputs_count=3))
@@ -257,7 +345,7 @@ def test_complex_pipeline(tmp_path):
     pipeline.add_node("enumerate", Enumerate(input_name="value", outputs_count=2))
     pipeline.add_node("add_three", AddValue(add=3))
 
-    pipeline.add_node("diff", Subtract(first_value="sum", second_value="value"))
+    pipeline.add_node("diff", Subtract(first_value="value", second_value="sum"))
     pipeline.add_node("greet_one_last_time", Greet(edge="diff", message="Bye bye!"))    
     pipeline.add_node("replicate", Replicate(input_value="diff", expected_outputs=["first", "second"]))
     pipeline.add_node("add_five", AddValue(add=5, input_name="first"))
@@ -286,6 +374,14 @@ def test_complex_pipeline(tmp_path):
         "parity_check.remainder_is_1", 
         "rename_odd_to_value", 
         "add_one", 
+        "loop_merger",
+        "below_10.below",
+        "double",
+        "loop_merger",
+    ])
+    pipeline.connect([
+        "below_10.above",
+        "rename_above_to_value",
         "accumulate_2", 
         "diff"
     ])
@@ -307,9 +403,8 @@ def test_complex_pipeline(tmp_path):
     pprint(results)
     print("accumulated: ", accumulate.sum)
 
-    assert results == {'add_five': [{'value': 6}], 'accumulate_3': [{'value': 5}]}
-    assert accumulate.sum == 10
-
+    assert results == {'add_five': [{'value': 16}], 'accumulate_3': [{'value': 15}]}
+    assert accumulate.sum == 32
 
 
 if __name__ == "__main__":

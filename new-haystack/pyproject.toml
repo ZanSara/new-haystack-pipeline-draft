@@ -56,7 +56,7 @@ all = ["new-haystack[others,dev]"]
 
 
 # [project.urls]
-# "CI: GitHub" = "https://github.com/deepset-ai/haystack/actions"
+# "CI: GitHub" = "https://github.com/deepset-ai/haystack/nodes"
 # "Docs: RTD" = "https://haystack.deepset.ai/overview/intro"
 # "GitHub: issues" = "https://github.com/deepset-ai/haystack/issues"
 # "GitHub: repo" = "https://github.com/deepset-ai/haystack"

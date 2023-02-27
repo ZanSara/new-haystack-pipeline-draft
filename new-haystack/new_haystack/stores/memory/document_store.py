@@ -343,7 +343,7 @@ class MemoryDocumentStore:
                     *[(doc["id"], doc["embedding"]) for doc in filtered_documents]
                 )
             except KeyError:
-                # FIXME make it actionable
+                # FIXME make it nodeable
                 raise MissingEmbeddingError(
                     "Some of the documents don't have embeddings. Use the Embedder to compute them."
                 )

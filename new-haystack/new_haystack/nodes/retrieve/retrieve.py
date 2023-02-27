@@ -2,14 +2,14 @@ from typing import Dict, List, Any
 
 import logging
 
-from new_haystack.actions import haystack_node, ActionError
+from new_haystack.nodes import haystack_node, NodeError
 from new_haystack.data import TextDocument, Query
 
 
 logger = logging.getLogger(__name__)
 
 
-class RetrieverError(ActionError):
+class RetrieverError(NodeError):
     pass
 
 
@@ -45,9 +45,9 @@ def retrieve_by_embedding_similarity(
 
     # FIXME Fail or log?
     if not store_name in stores.keys():
-        raise ActionError(f"No store called {store_name}.")
+        raise NodeError(f"No store called {store_name}.")
     if not hasattr(stores[store_name], "write_documents"):
-        raise ActionError(f"The store called {store_name} is not a DocumentStore.")
+        raise NodeError(f"The store called {store_name} is not a DocumentStore.")
 
     documents = stores[store_name].get_relevant_documents(
         queries=queries,

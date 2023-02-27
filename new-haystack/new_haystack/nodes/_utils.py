@@ -5,11 +5,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class ActionError(Exception):
+class NodeError(Exception):
     pass
 
 
-class ActionValidationError(ActionError):
+class NodeValidationError(NodeError):
     pass
 
 
@@ -20,7 +20,7 @@ def relevant_arguments(
     parameters: Dict[str, Dict[str, Any]],
 ):
     """
-    Finds which arguments the simplified action expects. Reads the function signature and
+    Finds which arguments the simplified node expects. Reads the function signature and
     returns the values corresponding to each parameter name from the data and parameters
     dictionaries.
     """
@@ -29,15 +29,15 @@ def relevant_arguments(
         signature.parameters[name].kind == inspect.Parameter.VAR_POSITIONAL
         for name in signature.parameters
     ):
-        raise ActionError(
-            "'haystack_simple_action' can only handle functions without *args. Use a list instead."
+        raise NodeError(
+            "'haystack_simple_node' can only handle functions without *args. Use a list instead."
         )
     if any(
         signature.parameters[name].kind == inspect.Parameter.VAR_KEYWORD
         for name in signature.parameters
     ):
-        raise ActionError(
-            "'haystack_simple_action' can only handle functions without **kwargs. Use a dictionary instead."
+        raise NodeError(
+            "'haystack_simple_node' can only handle functions without **kwargs. Use a dictionary instead."
         )
 
     # Check if there are unexpected parameters
@@ -53,7 +53,7 @@ def relevant_arguments(
             unexpected_params,
         )
 
-    # Filter out what the action expects
+    # Filter out what the node expects
     filtered_data = {
         key: value for key, value in data.items() if key in signature.parameters
     }
@@ -63,6 +63,6 @@ def relevant_arguments(
         if key in signature.parameters
     }
 
-    action_kwargs = {**filtered_data, **filtered_params}
-    logger.debug("%s kwargs: %s", name, action_kwargs)
-    return action_kwargs
+    node_kwargs = {**filtered_data, **filtered_params}
+    logger.debug("%s kwargs: %s", name, node_kwargs)
+    return node_kwargs

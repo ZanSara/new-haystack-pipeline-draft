@@ -4,7 +4,7 @@ import logging
 
 from tqdm import tqdm
 
-from new_haystack.actions import haystack_node, ActionError
+from new_haystack.nodes import haystack_node, NodeError
 from new_haystack.data import Data
 
 
@@ -26,7 +26,7 @@ except ImportError as e:
     )
 
 
-class EmbedderError(ActionError):
+class EmbedderError(NodeError):
     pass
 
 
