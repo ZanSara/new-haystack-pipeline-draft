@@ -456,7 +456,10 @@ class Pipeline:
                             for missing_input in inputs_to_wait_for:
                                 node_inputs["data"].append((missing_input, None))                   
 
-            # It is our turn! Let's raise the visits count
+            # **** RUN THE NODE ****
+            # It is our turn! The node is ready to run and all inputs are ready
+            # 
+            # Let's raise the visits count
             self.graph.nodes[node_name]["visits"] += 1
             
             # Check for default parameters and add them to the parameter's dictionary
@@ -489,8 +492,21 @@ class Pipeline:
                     f"{node_name} raised '{e.__class__.__name__}: {e}' \ninputs={node_inputs['data']}\nparameters={node_inputs.get('parameters', None)}\n\n"
                     "See the stacktrace above for more information."
                 ) from e
+            
+            # **** PROCESS THE OUTPUT ****
+            # The node run successfully. Let's store or distribute the output it produced, if it's valid.
+            #
+            # Type-check and standardize the output
+            if not isinstance(node_results, tuple):
+                node_results = (node_results, node_inputs["parameters"])
+            elif len(node_results) != 2:
+                raise PipelineRuntimeError(f"The node '{node_name}' returned a tuple of size {len(node_results)}, while the expected lenght is 2. Check out the '@haystack_node' docstring.")
+            if not isinstance(node_results[0], dict):
+                raise PipelineRuntimeError(f"The node '{node_name}' did not return neither a dictionary not a tuple. Check out the '@haystack_node' docstring.")
 
+            # Process the output of the node
             if not self.graph.out_edges(node_name):
+
                 # If there are no output edges, the output of this node is the output of the pipeline:
                 # store it in pipeline_results.
                 if not node_name in pipeline_results.keys():
@@ -523,7 +539,7 @@ class Pipeline:
                             inputs_buffer[target_node] = {"data": []}  # Create the buffer for the downstream node if it's not there yet
                         if edge in node_results[0].keys():
                             inputs_buffer[target_node]["data"].append((edge, node_results[0][edge]))
-                        inputs_buffer[target_node]["parameters"] = node_results[1] if len(node_results) == 2 else node_inputs["parameters"]
+                        inputs_buffer[target_node]["parameters"] = node_results[1]
 
         logger.info("Pipeline executed successfully.")
 

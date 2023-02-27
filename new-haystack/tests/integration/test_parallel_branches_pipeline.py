@@ -34,7 +34,7 @@ class AddValue:
         for _, value in data:
             value += self.add
 
-        return ({"value": value}, )
+        return {"value": value}
 
 
 @haystack_node
@@ -57,7 +57,7 @@ class Double:
         for _, value in data:
             value *= 2
 
-        return ({self.expected_outputs[0]: value}, )
+        return {self.expected_outputs[0]: value}
 
 
 @haystack_node
@@ -83,7 +83,7 @@ class Enumerate:
         if len(data) != 1:
             raise ValueError("This node accepts a single input.")
 
-        return ({output: data[0][1] for output in self.expected_outputs}, )
+        return {output: data[0][1] for output in self.expected_outputs}
 
 
 

@@ -33,9 +33,9 @@ class Below:
             raise ValueError("Below takes one input value only")
 
         if data[0][1] < self.threshold:
-            return {self.output_below: data[0][1]}, 
+            return {self.output_below: data[0][1]}
         else:
-            return {self.output_above: data[0][1]}, 
+            return {self.output_above: data[0][1]}
 
 
 @haystack_node
@@ -58,7 +58,7 @@ class AddValue:
         if len(data) > 1:
             raise ValueError("AddValue accepts one single input.")
         
-        return ({"value": data[0][1] + self.add}, )
+        return {"value": data[0][1] + self.add}
     
 
 @haystack_node
@@ -86,7 +86,7 @@ class Merge:
             if value is not None:
                 output = value
 
-        return ({self.output_name: output}, )
+        return {self.output_name: output}
 
 
 @haystack_node
@@ -107,7 +107,7 @@ class NoOp:
         output = {}
         for key, value in data:
             output[key] = value
-        return (output, )
+        return output
 
 
 @haystack_node
@@ -127,7 +127,7 @@ class Count:
         stores: Dict[str, Any],
     ):
         self.count += 1
-        return ({data[0][0]: data[0][1]}, )
+        return {data[0][0]: data[0][1]}
 
 
 @haystack_node
@@ -149,7 +149,7 @@ class Sum:
         for _, value in data:
             sum += value
 
-        return ({"sum": sum}, )
+        return {"sum": sum}
 
 
 def test_pipeline(tmp_path):

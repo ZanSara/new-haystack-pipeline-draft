@@ -34,7 +34,7 @@ class AddValue:
         for _, value in data:
             value += self.add
 
-        return ({"value": value}, )
+        return {"value": value}
 
 
 @haystack_node
@@ -57,7 +57,7 @@ class Double:
         for _, value in data:
             value *= 2
 
-        return ({self.expected_outputs[0]: value}, )
+        return {self.expected_outputs[0]: value}
 
 
 @haystack_node
@@ -83,7 +83,7 @@ class Remainder:
         if len(data) != 1:
             raise ValueError("This node accepts a single input.")
         remainder = data[0][1] % self.divisor
-        return ({str(remainder): data[0][1]}, )
+        return {str(remainder): data[0][1]}
 
 
 @haystack_node
@@ -106,7 +106,7 @@ class Sum:
             if value:
                 sum += value
 
-        return ({"sum": sum}, )
+        return {"sum": sum}
     
 
 
@@ -128,7 +128,7 @@ class NoOp:
         output = {}
         for key, value in data:
             output[key] = value
-        return (output, )
+        return output
 
 
 
@@ -157,7 +157,7 @@ def test_pipeline(tmp_path):
     results = pipeline.run({"value": 1})
     pprint(results)
 
-    assert results == {'value': 7}
+    assert results == {'sum': 7}
 
 
 if __name__ == "__main__":

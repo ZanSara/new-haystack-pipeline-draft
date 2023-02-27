@@ -32,7 +32,7 @@ class AddValue:
         for _, value in data:
             value += self.add
 
-        return ({"value": value}, )
+        return {"value": value}
 
 
 
@@ -54,7 +54,7 @@ class Double:
         for _, value in data:
             value *= 2
 
-        return ({self.expected_outputs[0]: value}, )
+        return {self.expected_outputs[0]: value}
 
 
 

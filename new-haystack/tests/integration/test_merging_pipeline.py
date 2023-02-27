@@ -32,7 +32,7 @@ class AddValue:
         for _, value in data:
             value += self.add
 
-        return ({"value": value}, )
+        return {"value": value}
 
 
 
@@ -55,7 +55,7 @@ class Sum:
         for _, value in data:
             sum += value
 
-        return ({"sum": sum}, )
+        return {"sum": sum}
 
 
 

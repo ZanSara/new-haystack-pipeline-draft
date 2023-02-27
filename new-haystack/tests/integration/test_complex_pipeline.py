@@ -35,7 +35,7 @@ class AddValue:
         for _, value in data:
             value += self.add
 
-        return ({"value": value}, )
+        return {"value": value}
 
 
 @haystack_node
@@ -61,7 +61,7 @@ class Sum:
             if value:
                 sum += value
 
-        return ({"sum": sum}, )
+        return {"sum": sum}
 
 
 @haystack_node
@@ -90,7 +90,7 @@ class Subtract:
         first_value = [value for name, value in data if name == self.first_value][0]
         second_value = [value for name, value in data if name == self.second_value][0]
         
-        return ({"diff": first_value - second_value}, )
+        return {"diff": first_value - second_value}
 
 
 @haystack_node
@@ -116,7 +116,7 @@ class Remainder:
         divisor = parameters.get(name, {}).get("divisor", self.divisor)
         for _, value in data:
             remainder = value % divisor
-        return ({f"remainder_is_{remainder}": value}, )
+        return {f"remainder_is_{remainder}": value}
 
 
 @haystack_node
@@ -143,7 +143,7 @@ class Enumerate:
             raise ValueError("Enumerate takes one single input.")
 
         output = {str(value): data[0][1] for value in range(len(self.expected_outputs))}
-        return (output, )
+        return output
 
 
 @haystack_node
@@ -169,7 +169,7 @@ class Greet:
         print("\n#################################")
         print(message)
         print("#################################\n")
-        return ({data[0][0]: data[0][1]}, )
+        return {data[0][0]: data[0][1]}
 
 
 @haystack_node
@@ -190,7 +190,7 @@ class Rename:
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
-        return ({self.expected_outputs[0]: data[0][1]}, )
+        return {self.expected_outputs[0]: data[0][1]}
 
 
 @haystack_node
@@ -214,7 +214,7 @@ class Accumulate:
     ):
         for _, value in data:
             self.sum += value
-        return ({data[0][0]: data[0][1]}, )
+        return {data[0][0]: data[0][1]}
 
 
 @haystack_node
@@ -236,7 +236,7 @@ class Replicate:
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
-        return ({output: data[0][1] for output in self.expected_outputs}, )
+        return {output: data[0][1] for output in self.expected_outputs}
 
 
 @haystack_node
@@ -262,9 +262,9 @@ class Below:
             raise ValueError("Below takes one input value only")
 
         if data[0][1] < self.threshold:
-            return {self.output_below: data[0][1]}, 
+            return {self.output_below: data[0][1]}
         else:
-            return {self.output_above: data[0][1]}, 
+            return {self.output_above: data[0][1]}
 
 
 @haystack_node
@@ -292,7 +292,7 @@ class Merge:
             if value is not None:
                 output = value
 
-        return ({self.output_name: output}, )
+        return {self.output_name: output}
 
 
 @haystack_node
@@ -313,7 +313,7 @@ class Double:
         for _, value in data:
             value *= 2
 
-        return ({self.expected_outputs[0]: value}, )
+        return {self.expected_outputs[0]: value}
 
 
 
