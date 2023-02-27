@@ -359,9 +359,9 @@ class MyNode:
 
 ### Nodes discovery logic
 
-Currently, at initialization time `Pipeline` scans the entire `sys.modules` looking for any function or class which is decorated with the `@haystack_node` decorator. 
+Currently, at initialization time `Pipeline` looks for classes which is decorated with the `@haystack_node` decorator under `__name__` (usually the running script) and `haystack`. 
 
-Such search can be scoped down or directed elsewhere by setting the `search_nodes_in` init parameter in `Pipeline`: however, all modules must be imported for the search to be successful. 
+Such search can be extended (or narrowed) by setting the `search_nodes_in` init parameter of `Pipeline`. Note that all modules must be imported for the search to be successful. 
 
 Search also might fail in narrow corner cases: for example, inner classes are not discovered (often the case in tests). For these scenarios, `Pipeline` also accepts a `extra_nodes` init parameter that allows users to explicitly provide a dictionary of nodes to merge with the other discovered nodes.
 
