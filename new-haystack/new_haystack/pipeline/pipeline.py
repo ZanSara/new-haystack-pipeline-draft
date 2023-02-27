@@ -10,6 +10,7 @@ from collections import OrderedDict
 import networkx as nx
 from networkx.drawing.nx_agraph import to_agraph
 
+import new_haystack
 from new_haystack.pipeline._utils import (
     PipelineRuntimeError,
     PipelineConnectError,
@@ -37,7 +38,7 @@ class Pipeline:
         self,
         path: Optional[Path] = None,
         max_loops_allowed: int = 100,
-        search_nodes_in: Optional[List[str]] = None,
+        search_nodes_in: Optional[List[str]] = [__name__, "new_haystack"],
         extra_nodes: Optional[Dict[str, Callable[..., Any]]] = None,
         validation: bool = True,
     ):
@@ -119,7 +120,7 @@ class Pipeline:
     def add_node(
         self,
         name: str,
-        node: Callable[..., Any],
+        instance: Any,
         parameters: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
@@ -137,8 +138,8 @@ class Pipeline:
             raise ValueError("'parameters' must be a dictionary.")
 
         # Add node to the graph, disconnected
-        logger.debug("Adding node '%s' (%s)", name, node)
-        self.graph.add_node(name, node=node, visits=0, parameters=parameters)
+        logger.debug("Adding node '%s' (%s)", name, instance)
+        self.graph.add_node(name, instance=instance, visits=0, parameters=parameters)
 
     def connect(self, nodes: List[str]) -> None:
         """
@@ -163,10 +164,10 @@ class Pipeline:
             # Specify the edge name for the upstream node only.
             if "." in upstream_node_name:
                 upstream_node_name, edge_name = upstream_node_name.split(".", maxsplit=1)
-                upstream_node = self.graph.nodes[upstream_node_name]["node"]
+                upstream_node = self.graph.nodes[upstream_node_name]["instance"]
             else:
                 # If the edge had no explicit name and the upstream node has multiple outputs, raise an exception            
-                upstream_node = self.graph.nodes[upstream_node_name]["node"]
+                upstream_node = self.graph.nodes[upstream_node_name]["instance"]
                 if len(upstream_node.expected_outputs) != 1:
                     raise PipelineConnectError(
                         f"Please specify which output of node '{upstream_node_name}' node "
@@ -177,7 +178,7 @@ class Pipeline:
 
             # Remove edge name from downstream_node name (it's needed only when the node is upstream)
             downstream_node_name = downstream_node_name.split(".", maxsplit=2)[0]
-            downstream_node = self.graph.nodes[downstream_node_name]["node"]
+            downstream_node = self.graph.nodes[downstream_node_name]["instance"]
 
             # All nodes names must be in the pipeline already
             if upstream_node_name not in self.graph.nodes:
@@ -263,14 +264,14 @@ class Pipeline:
         input_nodes = locate_pipeline_input_nodes(graph)
         graph.add_node("input", shape="plain")
         for node in input_nodes:
-            for edge in graph.nodes[node]["node"].expected_inputs:
+            for edge in graph.nodes[node]["instance"].expected_inputs:
                 graph.add_edge("input", node, label=edge)
 
         # Draw the output
         output_nodes = locate_pipeline_output_nodes(graph)
         graph.add_node("output", shape="plain")
         for node in output_nodes:
-            for edge in graph.nodes[node]["node"].expected_outputs:
+            for edge in graph.nodes[node]["instance"].expected_outputs:
                 graph.add_edge(node, "output", label=edge)
 
         graphviz = to_agraph(graph)
@@ -305,8 +306,16 @@ class Pipeline:
                 "You passed parameters for one or more node(s) that do not exist in the pipeline: %s",
                 [node for node in parameters.keys() if node not in self.graph.nodes],
             )
+
+        # Make sure all nodes are warm.
+        # It's the node's responsibility to make sure this method can be called at every Pipeline.run()
+        # without re-initializing everything.
+        for node in self.graph.nodes:
+            if hasattr(self.graph.nodes[node]["instance"], "warm_up"):
+                self.graph.nodes[node]["instance"].warm_up()
+ 
         #
-        # NOTES on the Pipeline.run() algorithm
+        # **** The Pipeline.run() algorithm ****
         #
         # Nodes are run as soon as an input for them appears in the inputs buffer.
         # When there's more than a node at once  in the buffer (which means some 
@@ -321,13 +330,12 @@ class Pipeline:
         #
         # Nodes should wait until all the necessary input data has arrived before running. 
         # If they're popped from the input_buffer before they're ready, they're put back in.
-        # If the pipeline has branches of different length, it's possible that a node
-        # might have to wait a bit and "let other nodes pass" before having all the 
-        # input data it needs.
+        # If the pipeline has branches of different lengths, it's possible that a node has to 
+        # wait a bit and let other nodes pass before receiving all the input data it needs.
         #
         # Data access:
         # - Name of the node       # self.graph.nodes  (List[str])
-        # - Node of the node     # self.graph.nodes[node]["node"]
+        # - Node instance          # self.graph.nodes[node]["instance"]
         # - Input nodes            # [e[0] for e in self.graph.in_edges(node)]
         # - Output nodes           # [e[1] for e in self.graph.out_edges(node)]
         # - Output edges           # [e[2]["label"] for e in self.graph.out_edges(node, data=True)]
@@ -473,7 +481,7 @@ class Pipeline:
                 }
             
             # Get the node
-            node_node = self.graph.nodes[node_name]["node"]
+            node_node = self.graph.nodes[node_name]["instance"]
 
             # Call the node
             try:

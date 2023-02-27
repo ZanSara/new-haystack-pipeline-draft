@@ -64,7 +64,7 @@ def test_pipeline(tmp_path):
     add_two = AddValue(add=2)
     make_the_sum = Sum(expected_inputs_count=2, expected_inputs_name="value")
 
-    pipeline = Pipeline(search_nodes_in=[__name__])
+    pipeline = Pipeline()
     pipeline.add_node("first_addition", add_two)
     pipeline.add_node("second_addition", add_two)
     pipeline.add_node("third_addition", add_two)

@@ -153,7 +153,8 @@ class Sum:
 
 
 def test_pipeline(tmp_path):
-    pipeline = Pipeline(search_nodes_in=[__name__], max_loops_allowed=10)
+    pipeline = Pipeline(max_loops_allowed=10)
+
     counter = Count(edge="value")
     pipeline.add_node("entry_point", NoOp(edges=["value"]))
     pipeline.add_node("entry_point_2", NoOp(edges=["value"]))

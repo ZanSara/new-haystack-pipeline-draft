@@ -111,7 +111,7 @@ def validate_graph(
     if not nx.is_weakly_connected(graph):
         raise PipelineValidationError(
             "The graph is not fully connected. Make sure all the nodes are connected to the same graph. "
-            "You can use Pipeline.draw() to visualize the graph, or inspect the Pipeline.graph object."
+            "You can use 'Pipeline.draw()' to visualize the graph, or inspect the 'Pipeline.graph' object."
         )
 
     # Check that the graph has starting nodes (nodes that take no input edges)
@@ -129,12 +129,12 @@ def validate_graph(
         )
 
     for node in graph.nodes:
-        node = graph.nodes[node]["node"]
+        node = graph.nodes[node]["instance"]
 
         # Check that all nodes in the graph are actually registered nodes
         if not type(node) in available_nodes.values():
             raise PipelineValidationError(
-                f"Node {node} not found. Are you sure it is a Haystack node?"
+                f"Node '{node}' not found. Are you sure it is a Haystack node?"
             )
 
     logger.debug("Pipeline is valid")
@@ -157,90 +157,92 @@ def locate_pipeline_output_nodes(graph):
 def load_nodes(
     graph: nx.DiGraph, available_nodes: Dict[str, Dict[str,Callable[..., Any]]]
 ) -> None:
-    """
-    Prepares the pipeline for the first execution. Instantiates all
-    class nodes present in the pipeline, if they're not instantiated yet.
-    """
-    # Convert node names into nodes and deserialize parameters
-    for name in graph.nodes:
-        try:
-            if isinstance(graph.nodes[name]["node"], str):
-                graph.nodes[name]["node"] = available_nodes[
-                    graph.nodes[name]["node"]
-                ]
-                # If it's a class, check if it's reusable or needs instantiation
-                if isclass(graph.nodes[name]["node"]):
-                    if "instance_id" in graph.nodes[name].keys():
-                        # Reusable: fish it out from the graph
-                        graph.nodes[name]["node"] = graph.nodes[
-                            graph.nodes[name]["instance_id"]
-                        ]["node"]
-                    else:
-                        # New: instantiate it
-                        graph.nodes[name]["node"] = graph.nodes[name]["node"](
-                            **graph.nodes[name]["init"] or {}
-                        )
-        except Exception as e:
-            raise PipelineDeserializationError(
-                "Couldn't deserialize this node: " + name
-            ) from e
+    pass
+#     """
+#     Prepares the pipeline for the first execution. Instantiates all
+#     class nodes present in the pipeline, if they're not instantiated yet.
+#     """
+#     # Convert node names into nodes and deserialize parameters
+#     for name in graph.nodes:
+#         try:
+#             if isinstance(graph.nodes[name]["node"], str):
+#                 graph.nodes[name]["node"] = available_nodes[
+#                     graph.nodes[name]["node"]
+#                 ]
+#                 # If it's a class, check if it's reusable or needs instantiation
+#                 if isclass(graph.nodes[name]["node"]):
+#                     if "instance_id" in graph.nodes[name].keys():
+#                         # Reusable: fish it out from the graph
+#                         graph.nodes[name]["node"] = graph.nodes[
+#                             graph.nodes[name]["instance_id"]
+#                         ]["node"]
+#                     else:
+#                         # New: instantiate it
+#                         graph.nodes[name]["node"] = graph.nodes[name]["node"](
+#                             **graph.nodes[name]["init"] or {}
+#                         )
+#         except Exception as e:
+#             raise PipelineDeserializationError(
+#                 "Couldn't deserialize this node: " + name
+#             ) from e
 
-        try:
-            if isinstance(graph.nodes[name]["parameters"], str):
-                graph.nodes[name]["parameters"] = json.loads(
-                    graph.nodes[name]["parameters"]
-                )
-        except Exception as e:
-            raise PipelineDeserializationError(
-                "Couldn't deserialize this node's parameters: " + name
-            ) from e
+#         try:
+#             if isinstance(graph.nodes[name]["parameters"], str):
+#                 graph.nodes[name]["parameters"] = json.loads(
+#                     graph.nodes[name]["parameters"]
+#                 )
+#         except Exception as e:
+#             raise PipelineDeserializationError(
+#                 "Couldn't deserialize this node's parameters: " + name
+#             ) from e
 
 
 def serialize(graph: nx.DiGraph()) -> None:
     """
     Serializes all the nodes into a state that can be dumped to JSON or YAML.
     """
-    reused_instances = {}
-    for name in graph.nodes:
-        # If the node is a reused instance, let's add the instance ID to the meta
-        if graph.nodes[name]["node"] in reused_instances.values():
-            graph.nodes[name]["instance_id"] = [
-                key
-                for key, value in reused_instances.items()
-                if value == graph.nodes[name]["node"]
-            ][0]
+    pass
+#     reused_instances = {}
+#     for name in graph.nodes:
+#         # If the node is a reused instance, let's add the instance ID to the meta
+#         if graph.nodes[name]["node"] in reused_instances.values():
+#             graph.nodes[name]["instance_id"] = [
+#                 key
+#                 for key, value in reused_instances.items()
+#                 if value == graph.nodes[name]["node"]
+#             ][0]
 
-        elif hasattr(graph.nodes[name]["node"], "init_parameters"):
-            # Class nodes need to have a self.init_parameters attribute (or property)
-            # if they want their init params to be serialized.
-            try:
-                graph.nodes[name]["init"] = graph.nodes[name]["node"].init_parameters
-            except Exception as e:
-                raise PipelineSerializationError(
-                    f"A node failed to provide its init parameters: {name}\n"
-                    "If this is a custom node you wrote, you should save your init parameters into an instance "
-                    "attribute called 'self.init_parameters' for this check to pass. Consider adding this "
-                    "step into your' '__init__' method."
-                ) from e
+#         elif hasattr(graph.nodes[name]["node"], "init_parameters"):
+#             # Class nodes need to have a self.init_parameters attribute (or property)
+#             # if they want their init params to be serialized.
+#             try:
+#                 graph.nodes[name]["init"] = graph.nodes[name]["node"].init_parameters
+#             except Exception as e:
+#                 raise PipelineSerializationError(
+#                     f"A node failed to provide its init parameters: {name}\n"
+#                     "If this is a custom node you wrote, you should save your init parameters into an instance "
+#                     "attribute called 'self.init_parameters' for this check to pass. Consider adding this "
+#                     "step into your' '__init__' method."
+#                 ) from e
 
-            # This is a new node instance, so let's store it
-            reused_instances[name] = graph.nodes[name]["node"]
+#             # This is a new node instance, so let's store it
+#             reused_instances[name] = graph.nodes[name]["node"]
 
-        # Serialize the callable by name
-        try:
-            graph.nodes[name]["node"] = graph.nodes[name][
-                "node"
-            ].__haystack_node__
-        except Exception as e:
-            raise PipelineSerializationError(f"Couldn't serialize this node: {name}")
+#         # Serialize the callable by name
+#         try:
+#             graph.nodes[name]["node"] = graph.nodes[name][
+#                 "node"
+#             ].__haystack_node__
+#         except Exception as e:
+#             raise PipelineSerializationError(f"Couldn't serialize this node: {name}")
 
-        # Serialize its default parameters with JSON
-        try:
-            if graph.nodes[name]["parameters"]:
-                graph.nodes[name]["parameters"] = json.dumps(
-                    graph.nodes[name]["parameters"]
-                )
-        except Exception as e:
-            raise PipelineSerializationError(
-                f"Couldn't serialize this node's parameters: {name}"
-            )
+#         # Serialize its default parameters with JSON
+#         try:
+#             if graph.nodes[name]["parameters"]:
+#                 graph.nodes[name]["parameters"] = json.dumps(
+#                     graph.nodes[name]["parameters"]
+#                 )
+#         except Exception as e:
+#             raise PipelineSerializationError(
+#                 f"Couldn't serialize this node's parameters: {name}"
+#             )

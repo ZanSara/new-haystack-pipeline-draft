@@ -320,7 +320,7 @@ class Double:
 def test_complex_pipeline(tmp_path):
     accumulate = Accumulate(edge="value")
 
-    pipeline = Pipeline(search_nodes_in=[__name__], max_loops_allowed=4)
+    pipeline = Pipeline(max_loops_allowed=4)
     pipeline.add_node("greet_first", Greet(edge="value", message="Hello!"))    
     pipeline.add_node("accumulate_1", accumulate)
     pipeline.add_node("add_two", AddValue(add=2))

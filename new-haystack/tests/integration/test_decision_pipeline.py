@@ -88,10 +88,9 @@ class Remainder:
 
 
 def test_pipeline(tmp_path):
-    
-    pipeline = Pipeline(search_nodes_in=[__name__], max_loops_allowed=2)
-
     add_one = AddValue(add=1, input_name="value")
+
+    pipeline = Pipeline()
     pipeline.add_node("add_one", add_one)
     pipeline.add_node("remainder", Remainder(input_name="value", divisor=3))
     pipeline.add_node("add_ten", AddValue(add=10, input_name="0"))

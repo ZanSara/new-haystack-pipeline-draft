@@ -59,7 +59,7 @@ class Double:
 
 
 def test_pipeline(tmp_path):
-    pipeline = Pipeline(search_nodes_in=[__name__])
+    pipeline = Pipeline()
     pipeline.add_node("first_addition", AddValue(add=2))
     pipeline.add_node("second_addition", AddValue(add=1))
     pipeline.add_node("double", Double(expected_inputs_name="value"))

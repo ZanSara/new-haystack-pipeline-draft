@@ -186,7 +186,6 @@ In this pipeline, several nodes send their input into a single output node. Note
 
 </details>
 
-
 <details>
 <summary>Branching pipeline with branch skipping</summary>
 
@@ -195,7 +194,6 @@ In this pipeline, several nodes send their input into a single output node. Note
 In this pipeline, only one edge will run depending on the decision taken by the `remainder` node. Note that this pipeline has several terminal nodes, something that is currently not supported by Haystack's `Pipeline`.
 
 </details>
-
 
 <details>
 <summary>Branching pipeline with parallel branch execution</summary>
@@ -206,7 +204,6 @@ In this pipeline, all the edges that leave `enumerate` are run by `Pipeline`. No
 
 </details>
 
-
 <details>
 <summary>Branching pipeline with branch skipping and merge</summary>
 
@@ -215,7 +212,6 @@ In this pipeline, all the edges that leave `enumerate` are run by `Pipeline`. No
 In this pipeline, the merge node can understand that some of its upstream nodes will never run (`remainder` selects only one output edge) and waits only for the inputs that it can receive, so one from `remainder`, plus `no-op`.
 
 </details>
-
 
 <details>
 <summary>Looping pipeline</summary>
@@ -228,8 +224,6 @@ Note that the new `Pipeline` can set a maximum number of allowed visits to nodes
 
 </details>
 
-
-
 <details>
 <summary>Looping pipeline with merge</summary>
 
@@ -238,7 +232,6 @@ Note that the new `Pipeline` can set a maximum number of allowed visits to nodes
 This is a pipeline with a loop and a counter that statefully counts how many times it has been called. There is also a merge node at the bottom, which shows how Pipeline can wait for the entire loop to exit before running `sum`.
 
 </details>
-
 
 <details>
 <summary>Arbitrarily complex pipeline</summary>
@@ -257,133 +250,124 @@ This is an example of how complex Pipelines the new objects can support. This pi
 
 ## The Node contract
 
-Nodes can be of two types: stateless and stateful. They follow a similar contract.
-
-### Stateless Node
+A Haystack node is any class that abides the following contract:
 
 ```python
+# This decorator does very little, but is necessary for Pipelines to recognize
+# this class as a Haystack node. Check its implementation for details.
 @haystack_node
-def my_stateless_node(
-    name: str,
-    data: Dict[str, Any],
-    parameters: Dict[str, Dict[str, Any]],
-    outgoing_edges: List[str],
-    stores: Dict[str, Any],
-):
-    my_own_parameters = parameters.get(name, {})
+class MyNode:
 
-    ... some code ...
+    def __init__(self, model_name: str: "deepset-ai/a-model-name"):
+        """
+        Haystack nodes should have an `__init__` method where they define:
+        
+        - `self.expected_inputs = [<expected_input_edge_name(s)>]`: 
+            A list with all the edges they can possibly receive input from
 
-    return {edge: (data, parameters) for edge in outgoing_edges}
-```
+        - `self.expected_outputs = [<expected_output_edge_name(s)>]`:  
+            A list with the edges they might possibly produce as output
 
-This is the contract for a stateless Haystack Node. It takes:
+        - `self.init_parameters = {<init parameters>}`:  
+            Any state they wish to be persisted in their YAML serialization.
+            These values will be given to the `__init__` method of a new instance
+            when the pipeline is deserialized.
 
-- `name: str`: the name of the node that is running it. Allows the node to find its own parameters in the parameters dictionary (see below).
-- `data: Dict[str, Any]`: the input data flowing down the pipeline.
-- `parameters: Dict[str, Dict[str, Any]]`: a dict of dicts with all the parameters for all nodes flowing down the pipeline. Note that all nodes have access to all parameters for all other nodes: this might come handy to nodes like `Agent`s, that might want to influence the behavior of nodes downstream.
-- `outgoing_edges`: the name of the edges connected downstream of this node. Mostly useful for decision nodes, for error messages and basic validation
-- `stores`: a dictionary of all the (Document)Stores connected to this pipeline.
+        The `__init__` must be extrememly lightweight, because it's a frequent
+        operation during the construction and validation of the pipeline. If a node
+        has some heavy state to initialize (models, backends, etc...) refer to the
+        `warm_up()` method.
+        """
+        # Lightweight state can be initialized here, for example storing the model name
+        # to be loaded later. See self.warm_up()
+        self.model = None
+        self.model_name = model_name
+        self.how_many_times_have_I_been_called = 0
 
-This function is supposed to return a tuple of dictionaries `(data, parameters)` along all edges that should run. Decision nodes should output on selected edges only, in order to prevent the deselected branches from running.
+        # Contract
+        self.init_parameters = {"model_name": model_name}
+        self.expected_inputs = ["expected_input_edge_name"]
+        self.expected_outputs = ["expected_output_edge_name"]
 
-The decorator is needed for this node to be recognized as a Haystack node.
-
-### Stateful Node
-
-```python
-@haystack_node
-class Counter:
-
-    def __init__(self, start_from: int = 0):
-        self.counter = start_from
-        self.init_parameters = {"start_from": start_from}
+    def warm_up(self):
+        """
+        This method is called by Pipeline before running. Make sure to avoid double-initializations,
+        because Pipeline will not keep track of which nodes `warm_up` was called.
+        """
+        if not self.model:
+            self.model = AutoModel.load_from_pretrained(self.model_name)
 
     def run(
         self,
         name: str,
-        data: Dict[str, Any],
+        data: List[Tuple[str, Any]],
         parameters: Dict[str, Any],
-        outgoing_edges: Set[str],
         stores: Dict[str, Any],
     ):
-        self.counter += 1
-        return {edge: (data, parameters) for edge in outgoing_edges}
+        """
+        This is the method where the main functionality of the node should be carried out.
+        It's called by `Pipeline.run()`, which passes the following parameters to it:
 
-    @staticmethod
-    def validate(init_parameters: Dict[str, Any]) -> None:
-        if init_parameters.get("start_from", 0) < 0:
-            raise NodeError("We count only positive numbers here.")
+        - `name: str`: the name of the node. Allows the node to find its own parameters in the `parameters` dictionary (see below).
+
+        - `data: List[Tuple[str, Any]]`: the input data. 
+            Pipeline guarantees that the following assert always passes: `assert self.expected_inputs == [name for name, value in data]`,
+            which means that:
+            - `data` is of the same length as `self.expected_inputs`.
+            - `data` contains one tuple for each string stored in `self.expected_inputs`.
+            - no guarantee is given on the values of these tuples: notably, if there was a decision node upstream, some values might be `None`.
+            For example, if a node declares `self.expected_inputs = ["value", "value"]` (think of a Sum node), `data` might look like:
+             - `[("value", 1), ("value", 10)]`
+             - `[("value", None), ("value", 10)]`
+             - `[("value", None), ("value", None)]`, or even 
+             - `[("value", 1), ("value", ["something", "unexpected"])]`
+            but it will never look like:
+             - `[("value", 1), ("value", 10), ("value", 100)]`,
+             - `[("value": 15)]` or
+             - `[("value": 15), ("unexpected", 10)]`.
+            
+        - `parameters: Dict[str, Dict[str, Any]]`: a dictionary of dictionaries with all the parameters for all nodes. 
+            Note that all nodes have access to all parameters for all other nodes: this might come handy to nodes like `Agent`s, that
+            want to influence the behavior of nodes downstream.
+            Nodes can access their own parameters using `name`, but they must not assume their name is present in the dictionary.
+            Therefore the best way to get the parameters is with `my_parameters = parameters.get(name, {})`
+
+        - `stores`: a dictionary of all the (Document)Stores connected to this pipeline.
+
+        Pipeline expect the output of this function to be either a dictionary or a tuple.
+        If it's a dictionary, it should always abide to the following format:
+        
+        `{output_name: output_value for output_name in <subset of self.expected_output>}`
+
+        Which means that:
+        - Nodes are not forced to produce output on all the expected outputs: for example nodes taking a decision, like classifiers, 
+            can produce output on a subset of the expected output edges and Pipeline will figure out the rest.
+        - Nodes must not add any key in the data dictionary that is not present in `self.expected_outputs`,
+        
+        Nodes may also want to return a tuple when they altered the content of `parameters` and want their changes to propagate
+        downstream. In that case, the format is `(data, parameters)` where `data` follows the contract above and `parameters` should
+        match the same format as it had in input, so `{"node_name": {"parameter_name": parameter_value, ...}, ...}`
+
+        """
+        self.how_many_times_have_I_been_called += 1
+
+        value = data[0][1]
+        print(f"Hello I'm {name}! This instance have been called {self.how_many_times_have_I_been_called} times and this is the value I received: {value}")
+
+        return {"expected_output_edge_name": value}
 ```
-
-This is the contract for a stateful Haystack Node. 
-
-Note how the `run()` method follows an identical contract than a stateless node: however, the decorator should be placed on top of the class.
-
-The `__init__` method is optional and can take an arbitrary number of parameters. However there are two requirements:
-- The init parameters need to be serializable for the `Pipeline.save()` method to work.
-- All relevant init parameters need to be manually added to the `self.init_parameters` attribute. Failure to do so means that missing parameters won't be serialized.
-
-The `validate()` method is also optional. Must be `@staticmethod` to allow validation to be performed on cold pipelines.
-
-### Simplified Nodes
-
-```python
-@haystack_simple_node
-def node(value, add):
-    return {"value": value + add}
-```
-     
-In simplified Haystack nodes, all parameters name are automatically extracted from the signature, looked for in the `data` and `parameters` dictionaries, and passed over to this function. Their output will be merged to the rest of the data flowing down the pipeline, overwriting any value already present under the same key.
-
-Simplified nodes have a series of limitations due to their extremely simplified contract:
-- They can only output the same values on all outgoing edges
-- They don't know their names
-- They can't access document stores
-- They can't change any other node's parameters
-
-Most of the above limitations are arbitrary and set in order to minimize the impact on the contract on the layout of
-the function. Some intermediate simplifications can be designed along this one, for example:
-- A simplified node taking also the `stores` variable to access the stores registry, like:
-```python
-@haystack_simple_node_with_stores
-def node(value, add, stores):
-    return {"value": value + add}
-```
-- A simplified node that can return primitives instead of dictionaries and specify the output key in the decorator, like:
-```python
-@haystack_very_simple_node(output_name="value")
-def node(value, add):
-    return value + add
-```
-- Simplified decision nodes, like:
-```python
-@haystack_decision
-def node(value, threshold):
-    if value > threshold:
-        return "above"  # name of the selected edge: all the data flows down unchanged
-    return "below"
-```
-and so on.
-
-** Bonus: Why `run()` and not `__call__()`? **
-
-Internally, both `@haystack_node` and `@haystack_simple_node` map `run()` to `__call__()` to simplify the job of `Pipeline.run()`. However, the simplified contract wraps the `run()` method heavily, destroying its original signature. To keep the original `run()` method usable outside of `Pipeline`s, the decorator assigns the wrapped version to `__call__()` to leave `run()` untouched. See the (arguably very scary) implementation of `@haystack_simple_node` if you want a headache or just love second-order functions wrapping multiple dunder class methods all at once.
-
-TODO: `@haystack_simple_node` works amazingly, but needs a better implementation.
-
 
 ### Nodes discovery logic
 
-Currently, at init time `Pipeline` scans the entire `sys.modules` looking for any function or class which is decorated with the `@haystack_node` decorator (or `@haystack_simple_node` and other similar simplifiers). 
+Currently, at initialization time `Pipeline` scans the entire `sys.modules` looking for any function or class which is decorated with the `@haystack_node` decorator. 
 
 Such search can be scoped down or directed elsewhere by setting the `search_nodes_in` init parameter in `Pipeline`: however, all modules must be imported for the search to be successful. 
 
-Search also might fail in narrow corner cases: for example, inner functions are not discovered (often the case in tests). For these scenarios, `Pipeline` also accepts a `extra_nodes` init parameter that allows users to explicitly provide a dictionary of nodes to integrate with the other discovered nodes.
+Search also might fail in narrow corner cases: for example, inner classes are not discovered (often the case in tests). For these scenarios, `Pipeline` also accepts a `extra_nodes` init parameter that allows users to explicitly provide a dictionary of nodes to merge with the other discovered nodes.
 
 Name collisions are handled by prefixing the node name with the name of the module it was imported from.
 
-See the draft implementation for details. 
+See the draft implementation for details.
 
 ### YAML representation
 
