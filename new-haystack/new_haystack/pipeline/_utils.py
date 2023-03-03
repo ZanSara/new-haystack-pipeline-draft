@@ -145,14 +145,14 @@ def locate_pipeline_input_nodes(graph):
     """
     Collect the nodes with no input edges: they receive directly the pipeline inputs.
     """
-    return [node for node in graph.nodes if not graph.in_edges(node)]
+    return [node for node in graph.nodes if not graph.in_edges(node) or graph.nodes[node]["input_node"]]
 
 
 def locate_pipeline_output_nodes(graph):
     """
     Collect the nodes with no output edges: these define the output of the pipeline.
     """
-    return [node for node in graph.nodes if not graph.out_edges(node)]
+    return [node for node in graph.nodes if not graph.out_edges(node) or graph.nodes[node]["output_node"]]
 
 
 def load_nodes(

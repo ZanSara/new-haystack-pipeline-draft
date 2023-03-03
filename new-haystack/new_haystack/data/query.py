@@ -25,7 +25,6 @@ class Query(Data):
     """
     embedding: Optional[np.ndarray] = field(default=lambda:None, repr=False)
 
-
 @dataclass(frozen=True, kw_only=True)
 class TextQuery(TextData, Query):
     pass

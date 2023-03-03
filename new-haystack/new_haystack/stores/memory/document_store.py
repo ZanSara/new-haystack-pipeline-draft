@@ -232,12 +232,12 @@ class MemoryDocumentStore:
         if use_bm25:
             relevant_documents = {}
             for query in queries:
-                relevant_documents[query] = self._bm25_retrieval(
+                relevant_documents[query] = list(self._bm25_retrieval(
                     query=query,
                     filters=filters,
                     top_k=top_k,
                     pool=pool,
-                )
+                ))
             return relevant_documents
 
         # Embedding Retrieval

@@ -114,6 +114,8 @@ class Pipeline:
         name: str,
         instance: Any,
         parameters: Optional[Dict[str, Any]] = None,
+        input_node: bool = False,
+        output_node: bool = False
     ) -> None:
         """
         Create a node for the given node. Nodes are not connected to anything by default:
@@ -138,7 +140,7 @@ class Pipeline:
 
         # Add node to the graph, disconnected
         logger.debug("Adding node '%s' (%s)", name, instance)
-        self.graph.add_node(name, instance=instance, visits=0, parameters=parameters)
+        self.graph.add_node(name, instance=instance, visits=0, parameters=parameters, input_node=input_node, output_node=output_node)
 
     def connect(self, nodes: List[str]) -> None:
         """
@@ -259,15 +261,16 @@ class Pipeline:
             )
         graph = deepcopy(self.graph)
 
-        # Draw the input
         input_nodes = locate_pipeline_input_nodes(graph)
+        output_nodes = locate_pipeline_output_nodes(graph)
+
+        # Draw the input
         graph.add_node("input", shape="plain")
         for node in input_nodes:
             for edge in graph.nodes[node]["instance"].expected_inputs:
                 graph.add_edge("input", node, label=edge)
 
         # Draw the output
-        output_nodes = locate_pipeline_output_nodes(graph)
         graph.add_node("output", shape="plain")
         for node in output_nodes:
             for edge in graph.nodes[node]["instance"].expected_outputs:

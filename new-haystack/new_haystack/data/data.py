@@ -39,6 +39,9 @@ class Data:
         # Plus, self.content is needed anyway.
         if name == "content":
             raise NotImplementedError("Use any of the Data subclasses, like TextDocument or TextQuery.")
+        
+    def __str__(self):
+        return f"{self.__class__.__name__}('{self.content}')"
 
     def __post_init__(self):
         """

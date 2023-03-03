@@ -1,8 +1,7 @@
 from typing import Dict, Any, List, Tuple
 
-import itertools
+import json
 from pathlib import Path
-from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
 from new_haystack.stores import MemoryDocumentStore
@@ -22,7 +21,7 @@ class RetrieveByBM25:
     """
     def __init__(self, 
             input_name: str = "query", 
-            output_name: str = "relevant_documents", 
+            output_name: str = "documents_by_query", 
             default_store: str = "documents", 
             default_top_k: int = 10
         ):
@@ -68,9 +67,7 @@ class RetrieveByBM25:
 
         results = stores[store_name].get_relevant_documents(queries=queries, top_k=top_k)
 
-        # Here is where we could use dataclasses instead of dicts - for Pipelines nothing changes.
-        relevant_documents = [{"query": query, "documents": list(documents)} for query, documents in results.items()]
-        return {self.expected_outputs[0]: relevant_documents}
+        return {self.expected_outputs[0]: results}
     
 
 @haystack_node
@@ -87,8 +84,8 @@ class ReaderByTransformers:
         default_doc_stride: int = 128,
         default_batch_size: int = 16,
         default_context_window_size: int = 70,
-        input_name: str = "relevant_documents", 
-        output_name: str = "answers", 
+        input_name: str = "documents_by_query",
+        output_name: str = "answers_by_query", 
     ):
         self.model_name_or_path = model_name_or_path
         self.default_top_k = default_top_k
@@ -139,15 +136,13 @@ class ReaderByTransformers:
         batch_size = my_parameters.pop("batch_size", self.default_batch_size)
         context_window_size = my_parameters.pop("context_window_size", self.default_context_window_size)
 
-        query_documents_pairs = data[0][1]
+        documents_for_queries = data[0][1]
 
         inputs = []
-        for query_documents_pair in query_documents_pairs:
-            query = query_documents_pair["query"].content
-            docs = [doc.content for doc in query_documents_pair["documents"]]
+        for query, documents in documents_for_queries.items():
             inputs.extend([
-                self.model.create_sample(question=query, context=doc)  # type: ignore
-                for doc in docs
+                self.model.create_sample(question=query.content, context=doc.content)  # type: ignore
+                for doc in documents
             ])
 
         # Inference
@@ -161,19 +156,18 @@ class ReaderByTransformers:
         )
 
         # Builds the TextAnswer object
-        for query_data in query_documents_pairs:
-            docs_len = len(query_data["documents"])
+        answers_for_queries = {query: [] for query in documents_for_queries.keys()}
+        for query, documents in documents_for_queries.items():
+            documents = list(documents) # FIXME consume here the iterator for now
+            docs_len = len(documents)
             relevant_predictions = predictions[:docs_len]
             predictions = predictions[docs_len:]
 
-            query_data["answers"] = []
-            for document, prediction in zip(query_data["documents"], relevant_predictions):
-                
+            for document, prediction in zip(documents, relevant_predictions):
                 if prediction.get("answer", None):
-                    
                     context_start = max(0, prediction["start"] - context_window_size)
                     context_end = min(len(document.content), prediction["end"] + context_window_size)
-                    query_data["answers"].append(
+                    answers_for_queries[query].append(
                         TextAnswer(
                             content=prediction["answer"],
                             score=prediction["score"],
@@ -185,23 +179,22 @@ class ReaderByTransformers:
                         )
                     )
                 elif no_answer:
-                    query_data["answers"].append(
+                    answers_for_queries[query].append(
                         TextAnswer(
                             content="",
                             score=prediction["score"],
                             meta=document.meta,
                         )
                     )
-            query_data["answers"] = sorted(query_data["answers"], reverse=True)[:top_k]
-            query_data["sources"] = query_data.pop("documents")
-
-        return {self.expected_outputs[0]: query_documents_pairs}
+            answers_for_queries[query] = sorted(answers_for_queries[query], reverse=True)[:top_k]
+        return {self.expected_outputs[0]: answers_for_queries}
 
 
 def test_pipeline(tmp_path):
     document_store = MemoryDocumentStore()
     document_store.write_documents([
         TextDocument(content="My name is Anna and I live in Paris."),
+        TextDocument(content="My name is Serena and I live in Rome."),
         TextDocument(content="My name is Julia and I live in Berlin."),
     ])
 
@@ -210,12 +203,13 @@ def test_pipeline(tmp_path):
     pipeline.add_node("retriever", RetrieveByBM25(default_store="my_documents"))
     pipeline.add_node("reader", ReaderByTransformers(model_name_or_path="distilbert-base-uncased-distilled-squad"))
 
-    pipeline.connect(["retriever", "reader",])
+    pipeline.connect(["retriever", "reader"])
     pipeline.draw(tmp_path / "query_pipeline.png")
 
     results = pipeline.run({"query": TextQuery(content="Who lives in Berlin?")})
 
-    pprint(results)
+    results["answers_by_query"] = {str(key): value for key, value in results["answers_by_query"].items()}
+    print(json.dumps(results, indent=4, default=repr))
 
 
 if __name__ == "__main__":
