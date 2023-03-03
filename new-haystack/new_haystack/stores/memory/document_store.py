@@ -5,7 +5,6 @@ import logging
 import numpy as np
 
 from new_haystack.data import Document, Query, TextDocument
-from new_haystack.models.device_management import initialize_device_settings
 
 from new_haystack.stores._utils import MissingEmbeddingError
 from new_haystack.stores.memory.store import MemoryStore
@@ -55,18 +54,18 @@ class MemoryDocumentStore:
             }
 
         # For embedding retrieval
-        self.device = None
-        init_devices, _ = initialize_device_settings(
-            devices=devices, use_cuda=use_gpu, multi_gpu=False
-        )
-        if init_devices:
-            if len(init_devices) > 1:
-                logger.warning(
-                    "Multiple devices are not supported in %s inference, using the first device %s.",
-                    self.__class__.__name__,
-                    init_devices[0],
-                )
-            self.device = init_devices[0]
+        # self.device = None
+        # init_devices, _ = initialize_device_settings(
+        #     devices=devices, use_cuda=use_gpu, multi_gpu=False
+        # )
+        # if init_devices:
+        #     if len(init_devices) > 1:
+        #         logger.warning(
+        #             "Multiple devices are not supported in %s inference, using the first device %s.",
+        #             self.__class__.__name__,
+        #             init_devices[0],
+        #         )
+        #     self.device = init_devices[0]
 
     def create_pool(self, pool: str, use_bm25: Optional[bool] = None):
         """
