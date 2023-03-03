@@ -1,1 +1,0 @@
-from new_haystack.nodes.store.store_documents import store_documents

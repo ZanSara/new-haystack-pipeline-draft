@@ -1,1 +1,0 @@
-from new_haystack.nodes.embed.embedder import Embedder
