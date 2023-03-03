@@ -71,6 +71,8 @@ def test_pipeline(tmp_path):
 
     assert results == {"value": 7}
 
+    pipeline.save(tmp_path / "linear_pipeline.toml")
+
 
 if __name__ == "__main__":
     test_pipeline(Path(__file__).parent)

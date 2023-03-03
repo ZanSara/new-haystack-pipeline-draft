@@ -11,9 +11,9 @@ from new_haystack.nodes.convert_files import (
 from new_haystack.nodes.embed import (
     Embedder
 )
-from new_haystack.nodes.retrieve import (
-    retrieve_by_embedding_similarity
-)
+# from new_haystack.nodes.retrieve import (
+#     retrieve_by_embedding_similarity
+# )
 from new_haystack.nodes.store import (
     store_documents
 )

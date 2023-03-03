@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 ContentTypes = Literal["text", "table", "image", "audio"]
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=True)
 class Data:
     """
     Base data class containing some data.
@@ -31,8 +31,8 @@ class Data:
     id: str = field(default_factory=str)
     content: Any = field(default_factory=lambda: None)
     content_type: ContentTypes
-    meta: Dict[str, Any] = field(default_factory=dict)
-    id_hash_keys: List[str] = field(default_factory=list)
+    meta: Dict[str, Any] = field(default_factory=dict, hash=False)
+    id_hash_keys: List[str] = field(default_factory=lambda: ["content"], hash=False)
 
     def __getattr__(self, name):
         # This is here to make Data "abstract".

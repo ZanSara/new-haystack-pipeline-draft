@@ -6,83 +6,133 @@ from new_haystack.nodes._utils import NodeError
 logger = logging.getLogger(__name__)
 
 
-def haystack_node(callable):
-    """
-    Bare minimum setup for Haystack nodes. Any class decorated with @haystack_node
-    can be picked up by `discover_nodes` and be used in a Pipeline, serialized, deserialized, etc.
+def haystack_node(class_):
+    '''
+    Marks a class as a Haystack node. Any class decorated with `@haystack_node`
+    can be picked up by a Pipeline, serialized, deserialized, etc.
 
-    Pipelines expects the following signature:
+    All nodes MUST follow the contract below. This docstring is the source of truth for Haystack Nodes contract.
 
-    ```
+    ```python    
+    @haystack_node
+    class MyNode:
+
+        def __init__(self, model_name: str: "deepset-ai/a-model-name"):
+            """
+            Haystack nodes should have an `__init__` method where they define:
+            
+            - `self.expected_inputs = [<expected_input_edge_name(s)>]`: 
+                A list with all the edges they can possibly receive input from
+
+            - `self.expected_outputs = [<expected_output_edge_name(s)>]`:  
+                A list with the edges they might possibly produce as output
+
+            - `self.init_parameters = {<init parameters>}`:  
+                Any state they wish to be persisted in their YAML serialization.
+                These values will be given to the `__init__` method of a new instance
+                when the pipeline is deserialized.
+
+            The `__init__` must be extrememly lightweight, because it's a frequent
+            operation during the construction and validation of the pipeline. If a node
+            has some heavy state to initialize (models, backends, etc...) refer to the
+            `warm_up()` method.
+            """
+            # Lightweight state can be initialized here, for example storing the model name
+            # to be loaded later. See self.warm_up()
+            self.model = None
+            self.model_name = model_name
+            self.how_many_times_have_I_been_called = 0
+
+            # Contract - all three are mandatory.
+            self.init_parameters = {"model_name": model_name}
+            self.expected_inputs = ["expected_input_edge_name"]
+            self.expected_outputs = ["expected_output_edge_name"]
+
+        def warm_up(self):
+            """
+            Optional method.
+
+            This method is called by Pipeline before the graph execution. 
+            Make sure to avoid double-initializations, because Pipeline will not keep 
+            track of which nodes it called `warm_up` on.
+            """
+            if not self.model:
+                self.model = AutoModel.load_from_pretrained(self.model_name)
+
         def run(
             self,
-            name: str, 
-            data: Dict[str, Any], 
+            name: str,
+            data: List[Tuple[str, Any]],
             parameters: Dict[str, Any],
-            stores: Dict[str, Any]
+            stores: Dict[str, Any],
         ):
+            """
+            Mandatory method.
+
+            This is the method where the main functionality of the node should be carried out.
+            It's called by `Pipeline.run()`, which passes the following parameters to it:
+
+            - `name: str`: the name of the node. Allows the node to find its own parameters in the `parameters` dictionary (see below).
+
+            - `data: List[Tuple[str, Any]]`: the input data. 
+                Pipeline guarantees that the following assert always passes: `assert self.expected_inputs == [name for name, value in data]`,
+                which means that:
+                - `data` is of the same length as `self.expected_inputs`.
+                - `data` contains one tuple for each string stored in `self.expected_inputs`.
+                - no guarantee is given on the values of these tuples: notably, if there was a decision node upstream, some values might be `None`.
+                For example, if a node declares `self.expected_inputs = ["value", "value"]` (think of a Sum node), `data` might look like:
+                - `[("value", 1), ("value", 10)]`
+                - `[("value", None), ("value", 10)]`
+                - `[("value", None), ("value", None)]`, or even 
+                - `[("value", 1), ("value", ["something", "unexpected"])]`
+                but it will never look like:
+                - `[("value", 1), ("value", 10), ("value", 100)]`,
+                - `[("value": 15)]` or
+                - `[("value": 15), ("unexpected", 10)]`.
+                
+            - `parameters: Dict[str, Dict[str, Any]]`: a dictionary of dictionaries with all the parameters for all nodes. 
+                Note that all nodes have access to all parameters for all other nodes: this might come handy to nodes like `Agent`s, that
+                want to influence the behavior of nodes downstream.
+                Nodes can access their own parameters using `name`, but they must not assume their name is present in the dictionary.
+                Therefore the best way to get the parameters is with `my_parameters = parameters.get(name, {})`
+
+            - `stores`: a dictionary of all the (Document)Stores connected to this pipeline.
+
+            Pipeline expect the output of this function to be either a dictionary or a tuple.
+            If it's a dictionary, it should always abide to the following format:
+            
+            `{output_name: output_value for output_name in <subset of self.expected_output>}`
+
+            Which means that:
+            - Nodes are not forced to produce output on all the expected outputs: for example nodes taking a decision, like classifiers, 
+                can produce output on a subset of the expected output edges and Pipeline will figure out the rest.
+            - Nodes must not add any key in the data dictionary that is not present in `self.expected_outputs`,
+            
+            Nodes may also want to return a tuple when they altered the content of `parameters` and want their changes to propagate
+            downstream. In that case, the format is `(data, parameters)` where `data` follows the contract above and `parameters` should
+            match the same format as it had in input, so `{"node_name": {"parameter_name": parameter_value, ...}, ...}`
+
+            """
+            self.how_many_times_have_I_been_called += 1
+
+            value = data[0][1]
+            print(f"Hello I'm {name}! This instance have been called {self.how_many_times_have_I_been_called} times and this is the value I received: {value}")
+
+            return {"expected_output_edge_name": value}
     ```
-    
-    Inputs have the following shape:
-    
-    ```
-        data = [
-            ("documents", [Doc(), Doc()...]),
-            ("files", [path.txt, path2.txt, ...]),
-            ("whatever", ...)
-            ...
-        ]
+    '''
+    logger.debug("Registering %s as a Haystack node", class_)
 
-        parameters = {
-            "node_1": {
-                "param_1": 1,
-                "param_2": 2,
-            }
-            "node_2": {
-                "param_1": 1,
-                "param_2": 3,
-            },
-            ...
-        }
-
-        stores = {
-            "my happy documents": <MemoryDocumentStore instance>,
-            "test-labels": <ESLabelStore instance>,
-            "files-store": <S3FileStore instance>,
-            ...
-        }
-    ```
-
-    Pipelines expects the following output:
-
-    ```
-        ({output_edge: value, ...}, <all_parameters or None>)
-    ```
-
-    Nodes can add/remove/alter parameter for EVERY following node.
-    Failing to produce output for one edge means that whatever node connects to it will receive 
-    no data and no parameters, and sending no data and no parameters to a node means that it will not run: 
-    see Pipeline for details.
-
-    `Pipeline.connect()` performs some basic validation. It expects nodes to have the following instance attributes:
-
-    ```
-    self.expected_inputs = ["documents", "query", ...]
-    self.expected_outputs = ["answers", ...]
-    ```
-
-    """
-    logger.debug("Registering %s as a Haystack node", callable)
-
-    # __haystack_node__ is used to tell Haystack Nodes from regular functions.
-    # Used by `find_nodes`. Set to the desired node name: normally the function/class 
-    # name, but could be customized.
-    callable.__haystack_node__ = callable.__name__
+    # '__haystack_node__' is used to distinguish Haystack Nodes from regular classes.
+    # Its value is set to the desired node name: normally it is the class name, but it can technically be customized.
+    class_.__haystack_node__ = class_.__name__
 
     # Check for run()
-    if not hasattr(callable, "run"):
+    if not hasattr(class_, "run"):
+
+        # TODO: check the signature
         raise NodeError(
             "Haystack nodes must have a 'run()' method. See the docs for more information."
         )
 
-    return callable
+    return class_

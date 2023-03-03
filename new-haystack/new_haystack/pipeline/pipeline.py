@@ -4,17 +4,16 @@ from pathlib import Path
 import logging
 from copy import deepcopy
 import sys
-import yaml
+import toml
 from collections import OrderedDict
 
 import networkx as nx
 from networkx.drawing.nx_agraph import to_agraph
 
-import new_haystack
 from new_haystack.pipeline._utils import (
     PipelineRuntimeError,
     PipelineConnectError,
-    PipelineError,
+    PipelineValidationError,
     NoSuchStoreError,
     PipelineMaxLoops,
     find_nodes,
@@ -44,16 +43,13 @@ class Pipeline:
     ):
         """
         Loads the pipeline from `path`, or creates an empty pipeline if no path is given.
-
-        Searches for nodes into the modules listed by `search_nodes_in`. To narrow down the scope of the search,
-        set `search_nodes_in=[<only the modules I want to look into for nodes>]`.
         """
         self.stores: Dict[str, object] = {}
         self.max_loops_allowed = max_loops_allowed
         self.extra_nodes = extra_nodes or {}
         self.available_nodes = extra_nodes or {}
         self.search_nodes_in = search_nodes_in
-        
+
         self.graph: nx.DiGraph
         if not path:
             logger.debug("Loading an empty pipeline")
@@ -84,11 +80,7 @@ class Pipeline:
         which will import any path in the `self._search_nodes_in` attribute,
         and overwrite the content of `self.available_nodes`.
         """
-        self._search_nodes_in = (
-            search_modules
-            if search_modules is not None
-            else list(sys.modules.keys())
-        )
+        self._search_nodes_in = search_modules
         self.available_nodes = {**find_nodes(self._search_nodes_in), **self.extra_nodes}
 
     def save(self, path: Path) -> None:
@@ -99,7 +91,7 @@ class Pipeline:
         serialize(_graph)
         with open(path, "w") as f:
             # FIXME we should dump the actual serialized graph, not just its node link data
-            yaml.dump(nx.node_link_data(_graph), f)
+            toml.dump(nx.node_link_data(_graph), f)
         logger.debug("Pipeline saved to %s.", path)
 
     def connect_store(self, name: str, store: object) -> None:
@@ -127,11 +119,18 @@ class Pipeline:
         Create a node for the given node. Nodes are not connected to anything by default:
         use `Pipeline.connect()` to connect nodes together.
 
-        Node names must be unique, but nodes can be reused from other nodes.
+        Node names must be unique, but node instances can be reused if needed.
         """
         # Node names are unique
         if name in self.graph.nodes:
             raise ValueError(f"Node named '{name}' already exists: choose another name.")
+        
+        # Node instances must be Haystack Nodes
+        if not type(instance) in self.available_nodes.values():
+            if not hasattr(instance, "__haystack_node__"):
+                raise PipelineValidationError(
+                    f"'{type(instance)}' doesn't seem to be a Haystack node. Check the documentation to learn what Haystack nodes are."
+                )
 
         # Params must be a dict
         if parameters and not isinstance(parameters, dict):

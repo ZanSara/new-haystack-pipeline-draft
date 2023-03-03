@@ -5,5 +5,4 @@ from new_haystack.stores._utils import (
     DuplicateError,
     MissingItemError,
     MissingEmbeddingError,
-    IndexFullError,
 )

@@ -19,3 +19,11 @@ from new_haystack.data.query import (
     ImageQuery,
     AudioQuery,
 )
+from new_haystack.data.answer import (
+    Answer,
+    TextAnswer,
+    TableAnswer,
+    ImageAnswer,
+    AudioAnswer,
+)
+from new_haystack.data.span import Span

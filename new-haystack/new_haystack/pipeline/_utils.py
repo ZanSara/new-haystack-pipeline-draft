@@ -3,6 +3,7 @@ from typing import Dict, Any, Callable, List, Union, Set
 import sys
 import json
 import logging
+from importlib import import_module
 from inspect import getmembers, isclass, isfunction
 
 import networkx as nx
@@ -56,15 +57,16 @@ def find_nodes(modules_to_search: List[str]) -> Dict[str, Callable[..., Any]]:
     for search_module in modules_to_search:
         logger.debug("Searching for Haystack nodes under %s...", search_module)
 
-        duplicate_names = []
-        for _, entity in getmembers(
-            sys.modules[search_module], lambda x: isfunction(x) or isclass(x)
-        ):
-            # It's a Haystack node
-            if hasattr(entity, "__haystack_node__"):
+        if not search_module in sys.modules.keys():
+            logger.info("Importing %s to search for Haystack actions inside...")
+            import_module(search_module)
 
-                # Two nodes were discovered with the same name - namespace them
+        duplicate_names = []
+        for _, entity in getmembers(sys.modules[search_module], isclass):
+            if hasattr(entity, "__haystack_node__"):
+                # It's a Haystack node
                 if entity.__haystack_node__ in nodes:
+                    # Two nodes were discovered with the same name - namespace them
                     other_entity = nodes[entity.__haystack_node__]
                     other_source_module = other_entity.__module__
                     logger.info(
@@ -75,18 +77,16 @@ def find_nodes(modules_to_search: List[str]) -> Dict[str, Callable[..., Any]]:
                         entity.__haystack_node__,
                         other_source_module,
                         search_module,
-
                         other_source_module,
                         entity.__haystack_node__,
                         search_module,
                         entity.__haystack_node__,
                     )
-                    duplicate_names.append(entity.__haystack_node__)
-
                     # Add both nodes as namespaced
                     nodes[f"{other_source_module}.{entity.__haystack_node__}"] = other_entity
                     nodes[f"{search_module}.{entity.__haystack_node__}"] = entity
-                    # Do not remove the non-namespaced one, so in the case of a third collision it geta detected properly
+                    # Do not remove the non-namespaced one, so in the case of a third collision it gets detected properly
+                    duplicate_names.append(entity.__haystack_node__)
 
                 nodes[entity.__haystack_node__] = entity
                 logger.debug(" * Found node: %s", entity)
@@ -95,6 +95,7 @@ def find_nodes(modules_to_search: List[str]) -> Dict[str, Callable[..., Any]]:
     for duplicate in duplicate_names:
         del nodes[duplicate]
 
+    print(nodes)
     return nodes
 
 
@@ -201,48 +202,47 @@ def serialize(graph: nx.DiGraph()) -> None:
     """
     Serializes all the nodes into a state that can be dumped to JSON or YAML.
     """
-    pass
-#     reused_instances = {}
-#     for name in graph.nodes:
-#         # If the node is a reused instance, let's add the instance ID to the meta
-#         if graph.nodes[name]["node"] in reused_instances.values():
-#             graph.nodes[name]["instance_id"] = [
-#                 key
-#                 for key, value in reused_instances.items()
-#                 if value == graph.nodes[name]["node"]
-#             ][0]
+    reused_instances = {}
+    for name in graph.nodes:
+        # If the node is a reused instance, let's add the instance ID to the meta
+        if graph.nodes[name]["instance"] in reused_instances.values():
+            graph.nodes[name]["instance_id"] = [
+                key
+                for key, value in reused_instances.items()
+                if value == graph.nodes[name]["instance"]
+            ][0]
 
-#         elif hasattr(graph.nodes[name]["node"], "init_parameters"):
-#             # Class nodes need to have a self.init_parameters attribute (or property)
-#             # if they want their init params to be serialized.
-#             try:
-#                 graph.nodes[name]["init"] = graph.nodes[name]["node"].init_parameters
-#             except Exception as e:
-#                 raise PipelineSerializationError(
-#                     f"A node failed to provide its init parameters: {name}\n"
-#                     "If this is a custom node you wrote, you should save your init parameters into an instance "
-#                     "attribute called 'self.init_parameters' for this check to pass. Consider adding this "
-#                     "step into your' '__init__' method."
-#                 ) from e
+        elif hasattr(graph.nodes[name]["instance"], "init_parameters"):
+            # Class nodes need to have a self.init_parameters attribute (or property)
+            # if they want their init params to be serialized.
+            try:
+                graph.nodes[name]["init"] = graph.nodes[name]["instance"].init_parameters
+            except Exception as e:
+                raise PipelineSerializationError(
+                    f"A node failed to provide its init parameters: {name}\n"
+                    "If this is a custom node you wrote, you should save your init parameters into an instance "
+                    "attribute called 'self.init_parameters' for this check to pass. "
+                    "Add this step into your' '__init__' method."
+                ) from e
 
-#             # This is a new node instance, so let's store it
-#             reused_instances[name] = graph.nodes[name]["node"]
+            # This is a new node instance, so let's store it
+            reused_instances[name] = graph.nodes[name]["instance"]
 
-#         # Serialize the callable by name
-#         try:
-#             graph.nodes[name]["node"] = graph.nodes[name][
-#                 "node"
-#             ].__haystack_node__
-#         except Exception as e:
-#             raise PipelineSerializationError(f"Couldn't serialize this node: {name}")
+        # Serialize the callable by name
+        try:
+            graph.nodes[name]["instance"] = graph.nodes[name][
+                "instance"
+            ].__haystack_node__
+        except Exception as e:
+            raise PipelineSerializationError(f"Couldn't serialize this node: {name}")
 
-#         # Serialize its default parameters with JSON
-#         try:
-#             if graph.nodes[name]["parameters"]:
-#                 graph.nodes[name]["parameters"] = json.dumps(
-#                     graph.nodes[name]["parameters"]
-#                 )
-#         except Exception as e:
-#             raise PipelineSerializationError(
-#                 f"Couldn't serialize this node's parameters: {name}"
-#             )
+        # Serialize its default parameters with JSON
+        try:
+            if graph.nodes[name]["parameters"]:
+                graph.nodes[name]["parameters"] = json.dumps(
+                    graph.nodes[name]["parameters"]
+                )
+        except Exception as e:
+            raise PipelineSerializationError(
+                f"Couldn't serialize this node's parameters: {name}"
+            )

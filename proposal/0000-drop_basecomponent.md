@@ -72,7 +72,7 @@ from new_haystack.pipeline import Pipeline
 from new_haystack.nodes import haystack_node
 
 # A Haystack Node. See below for details about this contract.
-# Crucial components are the @haystack_node decorator and the`run()` method
+# Crucial components are the @haystack_node decorator and the `run()` method
 @haystack_node
 class AddValue:
     def __init__(self, add: int = 1, input_name: str = "value", output_name: str = "value"):
@@ -88,10 +88,13 @@ class AddValue:
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
-        add = parameters.get(name, {}).get("add", self.add)
+        my_parameters = parameters.get(name, {})
+        add = my_parameters.get("add", self.add)
+
         for _, value in data:
             value += add
-        return ({"value": value}, )
+
+        return {"value": value}
 
 
 @haystack_node
@@ -110,12 +113,11 @@ class Double:
     ):
         for _, value in data:
             value *= 2
-        return ({self.expected_outputs[0]: value}, )
+
+        return {self.expected_outputs[0]: value}
 
 
-# Pipelines can be instructed about where to search for nodes.
-# By default they look in the entire sys.modules (a behavior similar to the old BaseComponent).
-pipeline = Pipeline(search_nodes_in=[__name__])
+pipeline = Pipeline()
 
 # Nodes can be initialized as standalone objects.
 # These instances can be added to the Pipeline in several places.
@@ -153,9 +155,9 @@ This section focuses on the concept rather than the implementation strategy. For
 ## The Pipeline API
 
 These are the core features that drove the design of the revised Pipeline API:
+
 - An execution graph that is more flexible than a DAG.
 - A clear place for `DocumentStore`s
-- Shallow/lazy loading of nodes to enable easy validation
 
 Therefore, the revised Pipeline object has the following API:
 
@@ -284,15 +286,18 @@ class MyNode:
         self.model_name = model_name
         self.how_many_times_have_I_been_called = 0
 
-        # Contract
+        # Contract - all three are mandatory.
         self.init_parameters = {"model_name": model_name}
         self.expected_inputs = ["expected_input_edge_name"]
         self.expected_outputs = ["expected_output_edge_name"]
 
     def warm_up(self):
         """
-        This method is called by Pipeline before running. Make sure to avoid double-initializations,
-        because Pipeline will not keep track of which nodes `warm_up` was called.
+        Optional method.
+
+        This method is called by Pipeline before the graph execution. 
+        Make sure to avoid double-initializations, because Pipeline will not keep 
+        track of which nodes it called `warm_up` on.
         """
         if not self.model:
             self.model = AutoModel.load_from_pretrained(self.model_name)
@@ -305,6 +310,8 @@ class MyNode:
         stores: Dict[str, Any],
     ):
         """
+        Mandatory method.
+
         This is the method where the main functionality of the node should be carried out.
         It's called by `Pipeline.run()`, which passes the following parameters to it:
 
@@ -317,14 +324,14 @@ class MyNode:
             - `data` contains one tuple for each string stored in `self.expected_inputs`.
             - no guarantee is given on the values of these tuples: notably, if there was a decision node upstream, some values might be `None`.
             For example, if a node declares `self.expected_inputs = ["value", "value"]` (think of a Sum node), `data` might look like:
-             - `[("value", 1), ("value", 10)]`
-             - `[("value", None), ("value", 10)]`
-             - `[("value", None), ("value", None)]`, or even 
-             - `[("value", 1), ("value", ["something", "unexpected"])]`
+            - `[("value", 1), ("value", 10)]`
+            - `[("value", None), ("value", 10)]`
+            - `[("value", None), ("value", None)]`, or even 
+            - `[("value", 1), ("value", ["something", "unexpected"])]`
             but it will never look like:
-             - `[("value", 1), ("value", 10), ("value", 100)]`,
-             - `[("value": 15)]` or
-             - `[("value": 15), ("unexpected", 10)]`.
+            - `[("value", 1), ("value", 10), ("value", 100)]`,
+            - `[("value": 15)]` or
+            - `[("value": 15), ("unexpected", 10)]`.
             
         - `parameters: Dict[str, Dict[str, Any]]`: a dictionary of dictionaries with all the parameters for all nodes. 
             Note that all nodes have access to all parameters for all other nodes: this might come handy to nodes like `Agent`s, that
@@ -357,50 +364,209 @@ class MyNode:
         return {"expected_output_edge_name": value}
 ```
 
+This contract is stored in the docstring of `@haystack_node` and acts as the single source of truth.
+
 ### Nodes discovery logic
 
-Currently, at initialization time `Pipeline` looks for classes which is decorated with the `@haystack_node` decorator under `__name__` (usually the running script) and `haystack`. 
+When pipelines are loaded from YAML, Pipeline needs to find the classes definition somewhere in the imported modules. Currently, at initialization `Pipeline` looks for classes which is decorated with the `@haystack_node` decorator under `haystack`, however such search can be extended (or narrowed) by setting the `search_nodes_in` init parameter of `Pipeline`. Note that it will try to import any module that is not imported yet.
 
-Such search can be extended (or narrowed) by setting the `search_nodes_in` init parameter of `Pipeline`. Note that all modules must be imported for the search to be successful. 
-
-Search also might fail in narrow corner cases: for example, inner classes are not discovered (often the case in tests). For these scenarios, `Pipeline` also accepts a `extra_nodes` init parameter that allows users to explicitly provide a dictionary of nodes to merge with the other discovered nodes.
+Search might fail in narrow corner cases: for example, inner classes are not discovered (often the case in tests). For these scenarios, `Pipeline` also accepts an `extra_nodes` init parameter that allows users to explicitly provide a dictionary of nodes to merge with the other discovered nodes.
 
 Name collisions are handled by prefixing the node name with the name of the module it was imported from.
 
-See the draft implementation for details.
+## Pipeline TOML representation
 
-### YAML representation
+_(Disclaimer: no draft implementation available yet)_
 
-TO BE DEFINED - the implementation in the draft is just stubbed and by no means representative of the desired outcome.
+Instead of YAML, which is prone to indentation issues, we select TOML as the pipeline serialization format.
 
-### Distinction between a Pipeline and a (Bundle? Blueprint? Manifest? Project? Schematic? Let's find a good name)
+Pipeline TOMLs have the following layout:
 
-Bundles are tiny wrappers on top of a set of pipelines, little more than dictionaries containing several pipelines.
+```toml
+# A list of "dependencies" for the pipeline.
+# Used to ensure all external nodes are present when loading.
+dependencies = [
+    "haystack == 2.0.0",
+    "my_custom_node_module == 0.0.1",
+]
 
-However, they can contain nodes or stores that are shared across different pipelines and pass them over when they're initialized.
+# Stores are defined each in a `[stores.<store_name>]` block.
+# Nodes will be able to access them by the name defined here,
+# in this case `my_first_store` (see the retrievers below).
+[stores.my_first_store]
+# class_name is mandatory
+class_name = "InMemoryDocumentStore"
+# Then come all the additional parameters for the store
+use_bm25 = True
 
-They also have `warm_up` and `cool_down` methods, which simply mirror the pipeline's.
+[stores.my_second_store]
+class_name = "InMemoryDocumentStore"
+use_bm25 = False
 
+# Nodes are defined each in a `[node.<node_name>]` block.
+# In order to reuse an instance across multiple nodes, instead
+# of a `class_name` there should be a pointer to another node.
+# TODO: check if TOML has pointer syntax.
+[nodes.my_sparse_retriever]
+# class_name is mandatory, unless there is a pointer to another node.
+class_name = "BM25Retriever"
+# Then come all the additional init parameters for the node
+store_name = "my_first_store"
+top_k = 5
+
+[nodes.my_dense_retriever]
+class_name = "EmbeddingRetriever"
+model_name = 'deepset-ai/a-model-name'
+store_name = "my_second_store"
+top_k = 5
+
+[nodes.my_ranker]
+class_name = "Ranker"
+expected_inputs = ["documents", "documents"]
+expected_outputs = ["documents"]
+
+[nodes.my_reader]
+class_name = "Reader"
+model_name = 'deepset-ai/a-model-name'
+top_k = 10
+
+# All the Pipeline parameters, notably:
+# - the list of edges is defined here
+# - Other init parameters like `max_allowed_loops`, etc..
+[pipeline]
+edges = [
+    ("my_sparse_retriever", "ranker"),
+    ("my_dense_retriever", "ranker"),
+    ("ranker", "reader"),
+]
+max_allowed_loops = 10
+
+```
+
+Note that: **1 TOML = 1 Pipeline**
+
+## Haystack Pipeline vs Haystack Project
+
+_(Disclaimer: no draft implementation available yet)_
+
+Haystack Projects are wrappers on top of a set of pipelines. Their advantage is that they can contain nodes and stores that are shared across different pipelines.
+
+In code, they look like this:
+
+```python
+class Project:
+
+    def __init__(self, path):
+        ... loads the Project TOML ...
+
+    def list_pipelines(self):
+        return self.pipelines
+
+    def list_nodes(self):
+        return self.nodes
+
+    def list_stores(self):
+        return self.stores
+
+    ... CRUD operations for Pipelines, Nodes and Stores ...
+
+    def save(self, path):
+        ... serializes down to TOML ...
+```
+
+A Project's TOML looks very similar to the Pipeline's, with the difference that each Pipeline is named.
+
+```toml
+dependencies = [
+    "haystack == 2.0.0",
+    "my_custom_node_module == 0.0.1",
+]
+
+[stores.my_first_store]
+class_name = "InMemoryDocumentStore"
+use_bm25 = True
+
+[stores.my_second_store]
+class_name = "InMemoryDocumentStore"
+use_bm25 = False
+
+[nodes.my_sparse_retriever]
+class_name = "BM25Retriever"
+store_name = "my_first_store"
+top_k = 5
+
+[nodes.my_dense_retriever]
+class_name = "EmbeddingRetriever"
+model_name = 'deepset-ai/a-model-name'
+store_name = "my_second_store"
+top_k = 5
+
+[nodes.my_ranker]
+class_name = "Ranker"
+expected_inputs = ["documents", "documents"]
+expected_outputs = ["documents"]
+
+[nodes.my_reader]
+class_name = "Reader"
+model_name = 'deepset-ai/a-model-name'
+top_k = 10
+
+# Note how this Pipeline is named, unlike in Pipeline's TOMLs
+[pipeline.hybrid_question_answering]
+edges = [
+    ("my_sparse_retriever", "ranker"),
+    ("my_dense_retriever", "ranker"),
+    ("ranker", "reader"),
+]
+max_allowed_loops = 10
+
+[pipeline.sparse_search]
+edges = [
+    ("my_sparse_retriever", "reader"),
+]
+max_allowed_loops = 10
+
+[pipeline.dense_search]
+edges = [
+    ("my_dense_retriever", "reader"),
+]
+max_allowed_loops = 10
+
+```
 
 # Open questions
 
-- YAML representation
-- Name for the group of Pipeline
-- Which "simplified contracts" we want to implement
+### Choice of TOML vs YAML or HCL
+
+I choose TOML because it looks declarative and quite readable while not suffering from typical YAML issues like sensitivity to whitespace and indentation. However there are many pros and cons of TOML, not least the fact that it needs an external package for serialization, unlike YAML.
+
+### Naming of "Haystack Project"
+
+Better naming is welcome.
+
+### At which level to serialize?
+
+Pipeline and Project's TOML definitions are extremely similar. We might want to keep both, or we might want to take a radical stance and decide that **Pipelines cannot be serialized: only Projects can**.
+
+There are clearly pros and cons and the point surely needs further discussion.
 
 # Drawbacks
 
 There are a number of drawbacks about the proposed approach:
 
-- Migration is going to be far from straightforward for us. Although many nodes can probably work with minor adaptations into the new system, it would be beneficial for most of them to be reduced to their `run()` method, especially indexing nodes. This means nodes need, at least, to be migrated one by one to the new system and code copied over.
-- Migration is going to be far from straightforward for the users: see Adoption strategy.
+- Migration is going to be far from straightforward for us. Although many nodes can probably work with minor adaptations into the new system, it would be beneficial for most of them to be reduced to their `run()` method, especially indexing nodes. This means that nodes need, at least, to be migrated one by one to the new system and code copied over.
+
+- Migration is going to be far from straightforward for the users: see "Adoption strategy".
+
 - This system allows for pipelines with more complex topologies, which brings the risk of more corner cases. `Pipeline.run()` must be made very solid in order to avoid this scenario.
-- Stateless nodes need less upfront validation, but might more easily break while running due to unexpected inputs. While well designed nodes should internally check and deal with such situations, we might face larger amount of bugs due to our failure at spotting lack of checks for unexpected inputs at review time.
-- The entire system work on the assumption that nodes are well behaving and respect both the contract and a number of "unspoken rules", like not touching other node's parameters unless necessary, pop their own input instead of letting it flow down the pipeline, etc. Malicious or otherwise "rude" nodes can wreak havoc in `Pipeline`s very easily by messing with other node's parameters and inputs.
+
+- Nodes might break more easily while running due to unexpected inputs. While well designed nodes should internally check and deal with such situations, we might face larger amount of bugs due to our failure at noticing the lack of checks at review time.
+
+- The entire system work on the assumption that nodes are well behaving and "polite" to other nodes, for example not touching their parameters unless necessary, etc. Malicious or otherwise "rude" nodes can wreak havoc in `Pipeline`s very easily by messing with other node's parameters and inputs.
 
 # Adoption strategy
 
-Old and new Pipeline, Nodes and nodes are going to be, in most cases, fully incompatible.
+Old and new `Pipeline` and nodes are going to be fully incompatible.
 
 We must provide a migration script that can convert their existing pipeline YAMLs into the new ones.
 

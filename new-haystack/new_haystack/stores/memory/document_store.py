@@ -184,7 +184,7 @@ class MemoryDocumentStore:
             pool=pool,
             duplicates=duplicates,
         )
-        if self.bm25 and len(documents) > 0:
+        if self.bm25:
             self.bm25[pool].update_bm25(self.get_documents(filters={}, pool=pool))
 
     def delete_documents(
@@ -232,7 +232,7 @@ class MemoryDocumentStore:
         if use_bm25:
             relevant_documents = {}
             for query in queries:
-                relevant_documents[query.id] = self._bm25_retrieval(
+                relevant_documents[query] = self._bm25_retrieval(
                     query=query,
                     filters=filters,
                     top_k=top_k,
@@ -276,11 +276,13 @@ class MemoryDocumentStore:
         filtered_document_ids = (
             self.get_document_ids(
                 filters={**filters, "content_type": "text"}, pool=pool
-            ),
+            )
         )
         tokenized_query = self.bm25[pool].bm25_tokenization_regex(query.content.lower())
-        docs_scores = self.bm25[pool].bm25.get_scores(tokenized_query)
+        docs_scores = self.bm25[pool].bm25_ranking.get_scores(tokenized_query)
         most_relevant_ids = np.argsort(docs_scores)[::-1]
+
+        all_ids = list(self.get_document_ids(filters={}))
 
         # We're iterating this way to avoid consuming the incoming iterator
         # We'd should keep everything as lazy as possible (no len(), no
@@ -289,7 +291,7 @@ class MemoryDocumentStore:
         returned_docs = 0
         while returned_docs < top_k:
             try:
-                id = most_relevant_ids[current_position]
+                id = all_ids[most_relevant_ids[current_position]]
             except IndexError as e:
                 logging.debug(
                     f"Returning less than top_k results as the filters returned less than {top_k} documents."
@@ -299,7 +301,7 @@ class MemoryDocumentStore:
                 current_position += 1
             else:
                 document_data = self.document_store.get_item(id=id, pool=pool)
-                document_data["score"] = docs_scores[id]
+                document_data["score"] = docs_scores[most_relevant_ids[current_position]]
                 doc = TextDocument.from_dict(document_data)
 
                 yield doc
@@ -377,6 +379,6 @@ class MemoryDocumentStore:
                 document = TextDocument.from_dict(dictionary=document_data)
                 relevant_documents.append(document)
 
-            results[query.id] = relevant_documents
+            results[query] = relevant_documents
 
         return results

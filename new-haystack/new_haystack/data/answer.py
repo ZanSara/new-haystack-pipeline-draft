@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from new_haystack.data.data import Data, TextData, TableData, ImageData, AudioData
+from new_haystack.data.span import Span
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,10 @@ class Answer(Data):
     id_hash_keys are referring to keys in the meta.
     """
     score: Optional[float] = None
+    context: Optional[str] = None
+    offset_in_document: Optional[Span] = None 
+    offset_in_context: Optional[Span] = None
+    document_id: Optional[str] = None
 
     def __lt__(self, other):
         if not hasattr(other, "score"):

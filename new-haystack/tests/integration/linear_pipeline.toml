@@ -1,0 +1,34 @@
+directed = true
+multigraph = false
+[[nodes]]
+instance = "AddValue"
+visits = 1
+id = "first_addition"
+
+[nodes.init]
+add = 2
+[[nodes]]
+instance = "AddValue"
+visits = 1
+id = "second_addition"
+
+[nodes.init]
+add = 1
+[[nodes]]
+instance = "Double"
+visits = 1
+id = "double"
+
+[nodes.init]
+expected_inputs_name = "value"
+[[links]]
+label = "value"
+source = "first_addition"
+target = "double"
+
+[[links]]
+label = "value"
+source = "double"
+target = "second_addition"
+
+[graph]

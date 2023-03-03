@@ -30,6 +30,7 @@ classifiers = [
 ]
 dependencies = [
   "networkx",  # Pipeline graphs
+  "toml",      # Serialize pipelines
   "numpy",     # Embeddings and scores
   "mmh3",      # Fast hashing function for Document ids
   "tqdm",      # Progress bars
@@ -37,11 +38,9 @@ dependencies = [
 
 [project.optional-dependencies]
 others = [
-  "torch",  # Running local models
+  "torch",      # Running local models
   "rank_bm25",  # BM25 support for MemoryDocumentStore
-  "matplotlib", # To draw pipelines
-  "netgraph", # To draw pipelines - no system deps, but fails on loops
-  "pygraphviz", # Requires graphviz
+  "pygraphviz", # Draw pipelines (requires the 'graphviz' system library)
 ]
 dev = [
   "pre-commit",

@@ -33,7 +33,7 @@ class BM25Representation:
         self.bm25_tokenization_regex = bm25_tokenization_regex
         self.bm25_algorithm = bm25_algorithm
         self.bm25_parameters = bm25_parameters
-        self.bm25: rank_bm25.BM25 = {}
+        self.bm25_ranking: rank_bm25.BM25 = {}
 
     @property
     def bm25_tokenization_regex(self):
@@ -73,4 +73,4 @@ class BM25Representation:
                     self.bm25_tokenization_regex(doc.content.lower())
                 )
 
-        self.bm25 = self.bm25_algorithm(tokenized_corpus, **self.bm25_parameters)
+        self.bm25_ranking = self.bm25_algorithm(tokenized_corpus, **self.bm25_parameters)
