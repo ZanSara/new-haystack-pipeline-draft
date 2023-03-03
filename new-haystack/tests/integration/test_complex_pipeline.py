@@ -5,14 +5,14 @@ from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
 from new_haystack.nodes import *
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-@haystack_node
+@node
 class AddValue:
     """
     Single input, single output node
@@ -22,8 +22,8 @@ class AddValue:
 
         # Contract
         self.init_parameters = {"add": add}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -38,16 +38,16 @@ class AddValue:
         return {"value": value}
 
 
-@haystack_node
+@node
 class Sum:
     """
     Multi input, single output node
     """
-    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2):
+    def __init__(self, inputs_name: str = "value", inputs_count: int = 2):
         # Contract
-        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name}
-        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
-        self.expected_outputs = ["sum"]
+        self.init_parameters = {"inputs_count": inputs_count, "inputs_name": inputs_name}
+        self.inputs = [inputs_name] * inputs_count
+        self.outputs = ["sum"]
 
     def run(
         self,
@@ -64,7 +64,7 @@ class Sum:
         return {"sum": sum}
 
 
-@haystack_node
+@node
 class Subtract:
     """
     Multi input, single output node
@@ -74,8 +74,8 @@ class Subtract:
         self.second_value = second_value
         # Contract
         self.init_parameters = {"first_value": first_value, "second_value": second_value}
-        self.expected_inputs = [first_value, second_value]
-        self.expected_outputs = ["diff"]
+        self.inputs = [first_value, second_value]
+        self.outputs = ["diff"]
 
     def run(
         self,
@@ -93,7 +93,7 @@ class Subtract:
         return {"diff": first_value - second_value}
 
 
-@haystack_node
+@node
 class Remainder:
     """
     Single input, multi output node, skipping all outputs except for one
@@ -103,8 +103,8 @@ class Remainder:
         self.divisor = divisor
         # Contract
         self.init_parameters = {"input_name": input_name, "divisor": divisor}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [f"remainder_is_{remainder}" for remainder in range(divisor)]
+        self.inputs = [input_name]
+        self.outputs = [f"remainder_is_{remainder}" for remainder in range(divisor)]
 
     def run(
         self,
@@ -119,7 +119,7 @@ class Remainder:
         return {f"remainder_is_{remainder}": value}
 
 
-@haystack_node
+@node
 class Enumerate:
     """
     Single input, multi output node, returning on all output edges
@@ -129,8 +129,8 @@ class Enumerate:
         self.outputs_count = outputs_count
         # Contract
         self.init_parameters = {"input_name": input_name, "outputs_count": outputs_count}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [str(out) for out in range(outputs_count)]
+        self.inputs = [input_name]
+        self.outputs = [str(out) for out in range(outputs_count)]
 
     def run(
         self,
@@ -142,11 +142,11 @@ class Enumerate:
         if len(data) != 1:
             raise ValueError("Enumerate takes one single input.")
 
-        output = {str(value): data[0][1] for value in range(len(self.expected_outputs))}
+        output = {str(value): data[0][1] for value in range(len(self.outputs))}
         return output
 
 
-@haystack_node
+@node
 class Greet:
     """
     Single input single output no-op node.
@@ -155,8 +155,8 @@ class Greet:
         self.message = message
         # Contract
         self.init_parameters = {"edge": edge, "message": message}
-        self.expected_inputs = [edge]
-        self.expected_outputs = [edge]
+        self.inputs = [edge]
+        self.outputs = [edge]
 
     def run(
         self,
@@ -172,7 +172,7 @@ class Greet:
         return {data[0][0]: data[0][1]}
 
 
-@haystack_node
+@node
 class Rename:
     """
     Single input single output rename node
@@ -180,8 +180,8 @@ class Rename:
     def __init__(self, input_name: str, output_name: str):
         # Contract
         self.init_parameters = {"input_name": input_name, "output_name": output_name}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -190,10 +190,10 @@ class Rename:
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
-        return {self.expected_outputs[0]: data[0][1]}
+        return {self.outputs[0]: data[0][1]}
 
 
-@haystack_node
+@node
 class Accumulate:
     """
     Stateful reusable node
@@ -202,8 +202,8 @@ class Accumulate:
         self.sum = 0
         # Contract
         self.init_parameters = {"edge": edge}
-        self.expected_inputs = [edge]
-        self.expected_outputs = [edge]
+        self.inputs = [edge]
+        self.outputs = [edge]
 
     def run(
         self,
@@ -217,17 +217,17 @@ class Accumulate:
         return {data[0][0]: data[0][1]}
 
 
-@haystack_node
+@node
 class Replicate:
     """
     Replicates the input data on all given output edges
     """
-    def __init__(self, input_value: str = "value", expected_outputs: List[str] = []):
-        self.expected_outputs = expected_outputs
+    def __init__(self, input_value: str = "value", outputs: List[str] = []):
+        self.outputs = outputs
         # Contract
-        self.init_parameters = {"input_value": input_value, "expected_outputs": expected_outputs}
-        self.expected_inputs = [input_value]
-        self.expected_outputs = expected_outputs
+        self.init_parameters = {"input_value": input_value, "outputs": outputs}
+        self.inputs = [input_value]
+        self.outputs = outputs
 
     def run(
         self,
@@ -236,10 +236,10 @@ class Replicate:
         parameters: Dict[str, Any],
         stores: Dict[str, Any],
     ):
-        return {output: data[0][1] for output in self.expected_outputs}
+        return {output: data[0][1] for output in self.outputs}
 
 
-@haystack_node
+@node
 class Below:
     def __init__(self, threshold: int = 10, input_name: str = "value", output_above: str = "above", output_below: str = "below"):
         self.threshold = threshold
@@ -248,8 +248,8 @@ class Below:
 
         # Contract
         self.init_parameters = {"threshold": threshold, "input_name": input_name, "output_above": output_above, "output_below": output_below}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_above, output_below]
+        self.inputs = [input_name]
+        self.outputs = [output_above, output_below]
 
     def run(
         self,
@@ -267,18 +267,18 @@ class Below:
             return {self.output_above: data[0][1]}
 
 
-@haystack_node
+@node
 class Merge:
     """
     Returns one single output on the output edge, which corresponds to the value of the last input edge that is not None.
     If no input edges received any value, returns None as well.
     """
-    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2, output_name: str = "value"):
+    def __init__(self, inputs_name: str = "value", inputs_count: int = 2, output_name: str = "value"):
         self.output_name = output_name
         # Contract
-        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name, "output_name": output_name}
-        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
-        self.expected_outputs = [output_name]
+        self.init_parameters = {"inputs_count": inputs_count, "inputs_name": inputs_name, "output_name": output_name}
+        self.inputs = [inputs_name] * inputs_count
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -295,13 +295,13 @@ class Merge:
         return {self.output_name: output}
 
 
-@haystack_node
+@node
 class Double:
     def __init__(self, input_name: str = "value", output_name: str = "value"):
         # Contract
         self.init_parameters = {"input_name": input_name, "output_name": output_name}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -313,7 +313,7 @@ class Double:
         for _, value in data:
             value *= 2
 
-        return {self.expected_outputs[0]: value}
+        return {self.outputs[0]: value}
 
 
 
@@ -334,12 +334,12 @@ def test_complex_pipeline(tmp_path):
     pipeline.add_node("rename_1_to_value", Rename(input_name="1", output_name="value"))
     pipeline.add_node("rename_above_to_value", Rename(input_name="above", output_name="value"))    
 
-    pipeline.add_node("loop_merger", Merge(expected_inputs_name="value", expected_inputs_count=2))
+    pipeline.add_node("loop_merger", Merge(inputs_name="value", inputs_count=2))
     pipeline.add_node("below_10", Below())
     pipeline.add_node("double", Double(input_name="below", output_name="value"))
 
     pipeline.add_node("greet_again", Greet(edge="value", message="Hello again!"))    
-    pipeline.add_node("sum", Sum(expected_inputs_name="value", expected_inputs_count=3))
+    pipeline.add_node("sum", Sum(inputs_name="value", inputs_count=3))
 
     pipeline.add_node("greet_enumerator", Greet(edge="value", message="Hello from enumerator!"))    
     pipeline.add_node("enumerate", Enumerate(input_name="value", outputs_count=2))
@@ -347,7 +347,7 @@ def test_complex_pipeline(tmp_path):
 
     pipeline.add_node("diff", Subtract(first_value="value", second_value="sum"))
     pipeline.add_node("greet_one_last_time", Greet(edge="diff", message="Bye bye!"))    
-    pipeline.add_node("replicate", Replicate(input_value="diff", expected_outputs=["first", "second"]))
+    pipeline.add_node("replicate", Replicate(input_value="diff", outputs=["first", "second"]))
     pipeline.add_node("add_five", AddValue(add=5, input_name="first"))
     pipeline.add_node("add_four", AddValue(add=4, input_name="second"))
     pipeline.add_node("accumulate_3", accumulate)

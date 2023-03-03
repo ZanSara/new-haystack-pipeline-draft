@@ -3,10 +3,10 @@ from typing import Dict, Any, List, Tuple
 import logging
 
 from new_haystack.data import TextQuery
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 
-@haystack_node
+@node
 class RetrieveByBM25:
     """
     Simple dummy BM25 Retriever that works with MemoryStore.
@@ -28,8 +28,8 @@ class RetrieveByBM25:
             "default_store": default_store,
             "default_top_k": default_top_k
         }
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -60,5 +60,5 @@ class RetrieveByBM25:
 
         results = stores[store_name].get_relevant_documents(queries=queries, top_k=top_k)
 
-        return {self.expected_outputs[0]: results}
+        return {self.outputs[0]: results}
     

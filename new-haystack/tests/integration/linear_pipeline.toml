@@ -20,7 +20,7 @@ visits = 1
 id = "double"
 
 [nodes.init]
-expected_inputs_name = "value"
+inputs_name = "value"
 [[links]]
 label = "value"
 source = "first_addition"

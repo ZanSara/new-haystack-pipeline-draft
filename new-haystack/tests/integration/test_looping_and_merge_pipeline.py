@@ -3,14 +3,14 @@ from pathlib import Path
 from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-@haystack_node
+@node
 class Below:
     def __init__(self, threshold: int = 10, input_name: str = "value", output_above: str = "above", output_below: str = "below"):
         self.threshold = threshold
@@ -19,8 +19,8 @@ class Below:
 
         # Contract
         self.init_parameters = {"threshold": threshold, "input_name": input_name, "output_above": output_above, "output_below": output_below}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_above, output_below]
+        self.inputs = [input_name]
+        self.outputs = [output_above, output_below]
 
     def run(
         self,
@@ -38,15 +38,15 @@ class Below:
             return {self.output_above: data[0][1]}
 
 
-@haystack_node
+@node
 class AddValue:
     def __init__(self, add: int = 1, input_name: str = "value", output_name: str = "value"):
         self.add = add
 
         # Contract
         self.init_parameters = {"add": add}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -61,18 +61,18 @@ class AddValue:
         return {"value": data[0][1] + self.add}
     
 
-@haystack_node
+@node
 class Merge:
     """
     Returns one single output on the output edge, which corresponds to the value of the last input edge that is not None.
     If no input edges received any value, returns None as well.
     """
-    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2, output_name: str = "value"):
+    def __init__(self, inputs_name: str = "value", inputs_count: int = 2, output_name: str = "value"):
         self.output_name = output_name
         # Contract
-        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name, "output_name": output_name}
-        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
-        self.expected_outputs = [output_name]
+        self.init_parameters = {"inputs_count": inputs_count, "inputs_name": inputs_name, "output_name": output_name}
+        self.inputs = [inputs_name] * inputs_count
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -89,13 +89,13 @@ class Merge:
         return {self.output_name: output}
 
 
-@haystack_node
+@node
 class NoOp:
     def __init__(self, edges: Set[str] = {"value"}):
         # Contract
         self.init_parameters = {"edges": edges}
-        self.expected_inputs = list(edges)
-        self.expected_outputs = list(edges)
+        self.inputs = list(edges)
+        self.outputs = list(edges)
 
     def run(
         self,
@@ -110,14 +110,14 @@ class NoOp:
         return output
 
 
-@haystack_node
+@node
 class Count:
     def __init__(self, edge: str):
         self.count = 0
         # Contract
         self.init_parameters = {"edge": edge}
-        self.expected_inputs = [edge]
-        self.expected_outputs = [edge]
+        self.inputs = [edge]
+        self.outputs = [edge]
 
     def run(
         self,
@@ -130,13 +130,13 @@ class Count:
         return {data[0][0]: data[0][1]}
 
 
-@haystack_node
+@node
 class Sum:
-    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2):
+    def __init__(self, inputs_name: str = "value", inputs_count: int = 2):
         # Contract
-        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name}
-        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
-        self.expected_outputs = ["sum"]
+        self.init_parameters = {"inputs_count": inputs_count, "inputs_name": inputs_name}
+        self.inputs = [inputs_name] * inputs_count
+        self.outputs = ["sum"]
 
     def run(
         self,
@@ -163,7 +163,7 @@ def test_pipeline(tmp_path):
     pipeline.add_node("add_one", AddValue(add=1, input_name="below"))
     pipeline.add_node("counter", counter)
     pipeline.add_node("add_two", AddValue(add=2, input_name="above"))
-    pipeline.add_node("sum", Sum(expected_inputs_count=2, expected_inputs_name="value"))
+    pipeline.add_node("sum", Sum(inputs_count=2, inputs_name="value"))
     pipeline.connect(["entry_point", "merge", "below_10.below", "add_one", "counter",  "merge"])
     pipeline.connect(["below_10.above", "add_two", "sum"])
     pipeline.connect(["entry_point_2", "sum"])

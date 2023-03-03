@@ -1,11 +1,11 @@
 from typing import Dict, Any, List, Tuple
 
 from new_haystack.data import TextAnswer, Span
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 
 
-@haystack_node
+@node
 class ReadByTransformers:
     """
     Simple dummy Transformers Reader.
@@ -42,8 +42,8 @@ class ReadByTransformers:
             "default_batch_size": default_batch_size,
             "default_context_window_size": default_context_window_size,
         }
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def warm_up(self):
         try:
@@ -122,4 +122,4 @@ class ReadByTransformers:
                         )
                     )
             answers_for_queries[query] = sorted(answers_for_queries[query], reverse=True)[:top_k]
-        return {self.expected_outputs[0]: answers_for_queries}
+        return {self.outputs[0]: answers_for_queries}

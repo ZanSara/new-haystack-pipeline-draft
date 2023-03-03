@@ -169,13 +169,13 @@ class Pipeline:
             else:
                 # If the edge had no explicit name and the upstream node has multiple outputs, raise an exception            
                 upstream_node = self.graph.nodes[upstream_node_name]["instance"]
-                if len(upstream_node.expected_outputs) != 1:
+                if len(upstream_node.outputs) != 1:
                     raise PipelineConnectError(
                         f"Please specify which output of node '{upstream_node_name}' node "
                         f"'{downstream_node_name}' should connect to. Node '{upstream_node_name}' has the following "
-                        f"outputs: {upstream_node.expected_outputs}"
+                        f"outputs: {upstream_node.outputs}"
                     )
-                edge_name = upstream_node.expected_outputs[0]
+                edge_name = upstream_node.outputs[0]
 
             # Remove edge name from downstream_node name (it's needed only when the node is upstream)
             downstream_node_name = downstream_node_name.split(".", maxsplit=2)[0]
@@ -201,31 +201,31 @@ class Pipeline:
                 return
 
             # Find all empty slots in the upstream and downstream nodes
-            free_downstream_inputs = deepcopy(downstream_node.expected_inputs)
+            free_downstream_inputs = deepcopy(downstream_node.inputs)
             for _, __, data in self.graph.in_edges(downstream_node_name, data=True):
                 position = free_downstream_inputs.index(data["label"])
                 free_downstream_inputs.pop(position)
 
-            free_upstream_outputs = deepcopy(upstream_node.expected_outputs)
+            free_upstream_outputs = deepcopy(upstream_node.outputs)
             for _, __, data in self.graph.out_edges(upstream_node_name, data=True):
                 position = free_upstream_outputs.index(data["label"])
                 free_upstream_outputs.pop(position)
 
             # Make sure the edge is connecting one free input to one free output
             if edge_name not in free_downstream_inputs or edge_name not in free_upstream_outputs:
-                expected_inputs_string = "\n".join(
+                inputs_string = "\n".join(
                     [" - " + edge[2]["label"] + f" (taken by {edge[0]})" for edge in self.graph.in_edges(downstream_node_name, data=True)] + \
                     [f" - {free_in_edge} (free)" for free_in_edge in free_downstream_inputs]
                 )
-                expected_outputs_string = "\n".join(
+                outputs_string = "\n".join(
                     [" - " + edge[2]["label"] + f" (taken by {edge[1]})" for edge in self.graph.out_edges(upstream_node_name, data=True)] + \
                     [f" - {free_out_edge} (free)" for free_out_edge in free_upstream_outputs] 
                 )
                 raise PipelineConnectError(
                     f"Cannot connect '{upstream_node_name}' with '{downstream_node_name}' with an edge named '{edge_name}': "
                     f"their declared inputs and outputs do not match.\n"
-                    f"Upstream node '{upstream_node_name}' declared these outputs:\n{expected_outputs_string}\n"
-                    f"Downstream node '{downstream_node_name}' declared these inputs:\n{expected_inputs_string}\n"
+                    f"Upstream node '{upstream_node_name}' declared these outputs:\n{outputs_string}\n"
+                    f"Downstream node '{downstream_node_name}' declared these inputs:\n{inputs_string}\n"
                 )
             # Create the edge
             logger.debug(
@@ -267,13 +267,13 @@ class Pipeline:
         # Draw the input
         graph.add_node("input", shape="plain")
         for node in input_nodes:
-            for edge in graph.nodes[node]["instance"].expected_inputs:
+            for edge in graph.nodes[node]["instance"].inputs:
                 graph.add_edge("input", node, label=edge)
 
         # Draw the output
         graph.add_node("output", shape="plain")
         for node in output_nodes:
-            for edge in graph.nodes[node]["instance"].expected_outputs:
+            for edge in graph.nodes[node]["instance"].outputs:
                 graph.add_edge(node, "output", label=edge)
 
         graphviz = to_agraph(graph)
@@ -423,7 +423,7 @@ class Pipeline:
                             self.graph.nodes[node_name]["visits"] += 1
                             logger.debug(
                                 "Skipping '%s', all input nodes were skipped and no inputs were received "
-                                "(skipped nodes: %s, expected_inputs: %s)", 
+                                "(skipped nodes: %s, inputs: %s)", 
                                 node_name, 
                                 nodes_to_wait_for,
                                 inputs_to_wait_for
@@ -510,9 +510,9 @@ class Pipeline:
             if not isinstance(node_results, tuple):
                 node_results = (node_results, node_inputs["parameters"])
             elif len(node_results) != 2:
-                raise PipelineRuntimeError(f"The node '{node_name}' returned a tuple of size {len(node_results)}, while the expected lenght is 2. Check out the '@haystack_node' docstring.")
+                raise PipelineRuntimeError(f"The node '{node_name}' returned a tuple of size {len(node_results)}, while the expected lenght is 2. Check out the '@haystack.node' docstring.")
             if not isinstance(node_results[0], dict):
-                raise PipelineRuntimeError(f"The node '{node_name}' did not return neither a dictionary not a tuple. Check out the '@haystack_node' docstring.")
+                raise PipelineRuntimeError(f"The node '{node_name}' did not return neither a dictionary not a tuple. Check out the '@haystack.node' docstring.")
 
             # Process the output of the node
             if not self.graph.out_edges(node_name):

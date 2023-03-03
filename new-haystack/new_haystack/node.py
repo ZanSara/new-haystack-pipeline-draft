@@ -6,25 +6,25 @@ from new_haystack.nodes._utils import NodeError
 logger = logging.getLogger(__name__)
 
 
-def haystack_node(class_):
+def node(class_):
     '''
-    Marks a class as a Haystack node. Any class decorated with `@haystack_node`
+    Marks a class as a Haystack node. Any class decorated with `@haystack.node`
     can be picked up by a Pipeline, serialized, deserialized, etc.
 
     All nodes MUST follow the contract below. This docstring is the source of truth for Haystack Nodes contract.
 
     ```python    
-    @haystack_node
+    node
     class MyNode:
 
         def __init__(self, model_name: str: "deepset-ai/a-model-name"):
             """
             Haystack nodes should have an `__init__` method where they define:
             
-            - `self.expected_inputs = [<expected_input_edge_name(s)>]`: 
+            - `self.inputs = [<expected_input_edge_name(s)>]`: 
                 A list with all the edges they can possibly receive input from
 
-            - `self.expected_outputs = [<expected_output_edge_name(s)>]`:  
+            - `self.outputs = [<expected_output_edge_name(s)>]`:  
                 A list with the edges they might possibly produce as output
 
             - `self.init_parameters = {<init parameters>}`:  
@@ -45,8 +45,8 @@ def haystack_node(class_):
 
             # Contract - all three are mandatory.
             self.init_parameters = {"model_name": model_name}
-            self.expected_inputs = ["expected_input_edge_name"]
-            self.expected_outputs = ["expected_output_edge_name"]
+            self.inputs = ["expected_input_edge_name"]
+            self.outputs = ["expected_output_edge_name"]
 
         def warm_up(self):
             """
@@ -75,12 +75,12 @@ def haystack_node(class_):
             - `name: str`: the name of the node. Allows the node to find its own parameters in the `parameters` dictionary (see below).
 
             - `data: List[Tuple[str, Any]]`: the input data. 
-                Pipeline guarantees that the following assert always passes: `assert self.expected_inputs == [name for name, value in data]`,
+                Pipeline guarantees that the following assert always passes: `assert self.inputs == [name for name, value in data]`,
                 which means that:
-                - `data` is of the same length as `self.expected_inputs`.
-                - `data` contains one tuple for each string stored in `self.expected_inputs`.
+                - `data` is of the same length as `self.inputs`.
+                - `data` contains one tuple for each string stored in `self.inputs`.
                 - no guarantee is given on the values of these tuples: notably, if there was a decision node upstream, some values might be `None`.
-                For example, if a node declares `self.expected_inputs = ["value", "value"]` (think of a Sum node), `data` might look like:
+                For example, if a node declares `self.inputs = ["value", "value"]` (think of a Sum node), `data` might look like:
                 - `[("value", 1), ("value", 10)]`
                 - `[("value", None), ("value", 10)]`
                 - `[("value", None), ("value", None)]`, or even 
@@ -106,7 +106,7 @@ def haystack_node(class_):
             Which means that:
             - Nodes are not forced to produce output on all the expected outputs: for example nodes taking a decision, like classifiers, 
                 can produce output on a subset of the expected output edges and Pipeline will figure out the rest.
-            - Nodes must not add any key in the data dictionary that is not present in `self.expected_outputs`,
+            - Nodes must not add any key in the data dictionary that is not present in `self.outputs`,
             
             Nodes may also want to return a tuple when they altered the content of `parameters` and want their changes to propagate
             downstream. In that case, the format is `(data, parameters)` where `data` follows the contract above and `parameters` should

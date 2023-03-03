@@ -4,14 +4,14 @@ from pathlib import Path
 from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-@haystack_node
+@node
 class AddValue:
     """
     Single input, single output node
@@ -21,8 +21,8 @@ class AddValue:
 
         # Contract
         self.init_parameters = {"add": add}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -37,15 +37,15 @@ class AddValue:
         return {"value": value}
 
 
-@haystack_node
+@node
 class Double:
     def __init__(self, input_name: str = "value", output_name: Optional[str] = None):
         # Contract
         self.init_parameters = {"input_name": input_name}
-        self.expected_inputs = [input_name]
+        self.inputs = [input_name]
         if not output_name:
             output_name = input_name
-        self.expected_outputs = [output_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -57,10 +57,10 @@ class Double:
         for _, value in data:
             value *= 2
 
-        return {self.expected_outputs[0]: value}
+        return {self.outputs[0]: value}
 
 
-@haystack_node
+@node
 class Enumerate:
     """
     Single input, multi output node, returning the input value on all output edges
@@ -70,8 +70,8 @@ class Enumerate:
         self.outputs_count = outputs_count
         # Contract
         self.init_parameters = {"input_name": input_name, "outputs_count": outputs_count}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [str(out) for out in range(outputs_count)]
+        self.inputs = [input_name]
+        self.outputs = [str(out) for out in range(outputs_count)]
 
     def run(
         self,
@@ -83,7 +83,7 @@ class Enumerate:
         if len(data) != 1:
             raise ValueError("This node accepts a single input.")
 
-        return {output: data[0][1] for output in self.expected_outputs}
+        return {output: data[0][1] for output in self.outputs}
 
 
 

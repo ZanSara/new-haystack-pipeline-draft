@@ -5,22 +5,22 @@ from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
 from new_haystack.nodes import *
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-@haystack_node
+@node
 class AddValue:
     def __init__(self, add: int = 1, input_name: str = "value", output_name: str = "value"):
         self.add = add
 
         # Contract
         self.init_parameters = {"add": add}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -36,13 +36,13 @@ class AddValue:
 
 
 
-@haystack_node
+@node
 class Sum:
-    def __init__(self, expected_inputs_name: str = "value", expected_inputs_count: int = 2):
+    def __init__(self, inputs_name: str = "value", inputs_count: int = 2):
         # Contract
-        self.init_parameters = {"expected_inputs_count": expected_inputs_count, "expected_inputs_name": expected_inputs_name}
-        self.expected_inputs = [expected_inputs_name] * expected_inputs_count
-        self.expected_outputs = ["sum"]
+        self.init_parameters = {"inputs_count": inputs_count, "inputs_name": inputs_name}
+        self.inputs = [inputs_name] * inputs_count
+        self.outputs = ["sum"]
 
     def run(
         self,
@@ -62,7 +62,7 @@ class Sum:
 def test_pipeline(tmp_path):
 
     add_two = AddValue(add=2)
-    make_the_sum = Sum(expected_inputs_count=2, expected_inputs_name="value")
+    make_the_sum = Sum(inputs_count=2, inputs_name="value")
 
     pipeline = Pipeline()
     pipeline.add_node("first_addition", add_two)

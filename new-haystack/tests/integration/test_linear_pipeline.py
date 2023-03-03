@@ -5,22 +5,22 @@ from pprint import pprint
 
 from new_haystack.pipeline import Pipeline
 from new_haystack.nodes import *
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-@haystack_node
+@node
 class AddValue:
     def __init__(self, add: int = 1, input_name: str = "value", output_name: str = "value"):
         self.add = add
 
         # Contract
         self.init_parameters = {"add": add}
-        self.expected_inputs = [input_name]
-        self.expected_outputs = [output_name]
+        self.inputs = [input_name]
+        self.outputs = [output_name]
 
     def run(
         self,
@@ -36,13 +36,13 @@ class AddValue:
 
 
 
-@haystack_node
+@node
 class Double:
-    def __init__(self, expected_inputs_name: str = "value"):
+    def __init__(self, inputs_name: str = "value"):
         # Contract
-        self.init_parameters = {"expected_inputs_name": expected_inputs_name}
-        self.expected_inputs = [expected_inputs_name]
-        self.expected_outputs = [expected_inputs_name]
+        self.init_parameters = {"inputs_name": inputs_name}
+        self.inputs = [inputs_name]
+        self.outputs = [inputs_name]
 
     def run(
         self,
@@ -54,7 +54,7 @@ class Double:
         for _, value in data:
             value *= 2
 
-        return {self.expected_outputs[0]: value}
+        return {self.outputs[0]: value}
 
 
 
@@ -62,7 +62,7 @@ def test_pipeline(tmp_path):
     pipeline = Pipeline()
     pipeline.add_node("first_addition", AddValue(add=2))
     pipeline.add_node("second_addition", AddValue(add=1))
-    pipeline.add_node("double", Double(expected_inputs_name="value"))
+    pipeline.add_node("double", Double(inputs_name="value"))
     pipeline.connect(["first_addition", "double", "second_addition"])
     pipeline.draw(tmp_path / "linear_pipeline.png")
 
