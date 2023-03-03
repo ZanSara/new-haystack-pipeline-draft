@@ -94,7 +94,7 @@ class Pipeline:
             toml.dump(nx.node_link_data(_graph), f)
         logger.debug("Pipeline saved to %s.", path)
 
-    def connect_store(self, name: str, store: object) -> None:
+    def add_store(self, name: str, store: object) -> None:
         self.stores[name] = store
 
     def list_stores(self) -> Iterable[str]:
@@ -105,9 +105,6 @@ class Pipeline:
             return self.stores[name]
         except KeyError as e:
             raise NoSuchStoreError(f"No store named '{name}' is connected to this pipeline.") from e
-
-    def disconnect_store(self, name: str) -> None:
-        del self.stores[name]
 
     def add_node(
         self,

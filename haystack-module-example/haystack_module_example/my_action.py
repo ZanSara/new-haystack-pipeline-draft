@@ -2,13 +2,13 @@ from typing import Dict, Set, Any
 
 import logging
 
-from new_haystack.nodes import haystack_node
+from new_haystack.nodes import node
 
 
 logger = logging.getLogger(__name__)
 
 
-@haystack_node
+@node
 def my_node(
     name: str,
     data: Dict[str, Any],

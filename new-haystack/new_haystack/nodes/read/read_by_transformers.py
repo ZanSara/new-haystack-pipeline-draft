@@ -50,11 +50,12 @@ class ReadByTransformers:
             from transformers import pipeline
         except Exception as e:
             raise ImportError("Can't import 'transformers': this node won't work.") from e
-
-        self.model = pipeline(
-            "question-answering",
-            model=self.model_name_or_path,
-        )
+        
+        if not self.model:
+            self.model = pipeline(
+                "question-answering",
+                model=self.model_name_or_path,
+            )
 
     def run(
         self,

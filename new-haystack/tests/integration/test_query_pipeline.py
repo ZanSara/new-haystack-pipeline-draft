@@ -19,7 +19,7 @@ def test_pipeline(tmp_path):
         TextDocument(content="My name is Julia and I live in Berlin."),
     ])
     pipeline = Pipeline()
-    pipeline.connect_store("my_documents", document_store)
+    pipeline.add_store("my_documents", document_store)
     pipeline.add_node("retriever", RetrieveByBM25(default_store="my_documents"))
     pipeline.add_node("reader", ReadByTransformers(model_name_or_path="distilbert-base-uncased-distilled-squad"))
 
