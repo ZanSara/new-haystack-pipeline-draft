@@ -33,14 +33,14 @@ class Answer(Data):
 
     def __lt__(self, other):
         if not hasattr(other, "score"):
-            raise ValueError("Documents can only be compared with other Documents.")
+            raise ValueError("Answers can only be compared with other Answers.")
         return (self.score if self.score is not None else -inf) < (
             other.score if other.score is not None else -inf
         )
 
     def __le__(self, other):
         if not hasattr(other, "score"):
-            raise ValueError("Documents can only be compared with other Documents.")
+            raise ValueError("Answers can only be compared with other Answers.")
         return (self.score if self.score is not None else -inf) <= (
             other.score if other.score is not None else -inf
         )
